@@ -4,8 +4,8 @@
     "rootDir": "./src",
     "outDir": "./dist",
 
-    "moduleResolution": "Node",
-    "module": "CommonJS",
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext",
 
     // We don't need these for our final build
     "declarationMap": false,
