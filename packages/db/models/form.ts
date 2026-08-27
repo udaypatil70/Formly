@@ -63,6 +63,7 @@ export const formsTable = pgTable(
     slug: varchar("slug", { length: 255 }).notNull().unique(),
     status: formStatusEnum("status").default("draft").notNull(),
     visibility: formVisibilityEnum("visibility").default("public").notNull(),
+    archived: boolean("archived").default(false).notNull(),
     themeId: uuid("theme_id").references(() => themesTable.id, {
       onDelete: "set null",
     }),

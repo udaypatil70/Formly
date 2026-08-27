@@ -93,6 +93,7 @@ export const FormSchema = z.object({
     ),
   status: z.enum(["draft", "published", "unpublished"]),
   visibility: z.enum(["public", "unlisted"]),
+  archived: z.boolean().default(false),
   themeId: z.string().uuid().nullable().optional(),
   settings: z
     .object({

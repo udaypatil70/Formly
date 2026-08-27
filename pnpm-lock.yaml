@@ -275,6 +275,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../db
       '@repo/services':
         specifier: workspace:*
         version: link:../services

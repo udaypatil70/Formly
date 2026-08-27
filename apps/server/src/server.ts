@@ -46,12 +46,12 @@ logger.debug(`docs: ${env.BASE_URL}/docs`);
 app.use("/docs", apiReference({ url: "/openapi.json" }));
 
 // better-auth handler
-app.all("/auth/*", async (req, res) => {
+app.all("/auth/{*path}", async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", env.BASE_URL);
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value) headers.set(key, Array.isArray(value) ? value[0] : value);
+      if (value) headers.set(key, Array.isArray(value) ? value[0] ?? "" : value);
     }
 
     const response = await auth.handler(new Request(url, {

@@ -27,19 +27,21 @@ export const authRouter = router({
       }),
     )
     .query(async ({ ctx }) => {
+      const session = ctx.session?.session ?? null;
+      const user = ctx.user;
       return {
-        user: ctx.user
+        user: user
           ? {
-              id: ctx.user.id,
-              name: ctx.user.name,
-              email: ctx.user.email,
-              image: ctx.user.image ?? null,
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              image: user.image ?? null,
             }
           : null,
-        session: ctx.session
+        session: session
           ? {
-              id: ctx.session.id,
-              expiresAt: ctx.session.expiresAt.toISOString(),
+              id: session.id,
+              expiresAt: session.expiresAt.toISOString(),
             }
           : null,
       };
@@ -51,8 +53,7 @@ export const authRouter = router({
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx }) => {
       await auth.api.signOut({
-        headers: new Headers(),
-        session: ctx.session,
+        headers: ctx.headers,
       });
       return { success: true };
     }),
