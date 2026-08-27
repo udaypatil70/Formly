@@ -1,5 +1,5 @@
-import { db } from "@repo/database";
-import { usersTable } from "@repo/database/schema";
+import { db } from "@repo/db";
+import { usersTable } from "@repo/db/schema";
 import { eq } from "drizzle-orm";
 
 class UserService {

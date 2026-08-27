@@ -156,7 +156,7 @@ export function buildResponseSchema(fields: Field[]) {
 
       case "single_select":
         fieldSchema = field.options
-          ? z.enum(field.options.map((o) => o.value) as [string, ...string[]])
+          ? z.enum(field.options.map((o: { value: string }) => o.value) as [string, ...string[]])
           : z.string();
         break;
 
@@ -165,7 +165,7 @@ export function buildResponseSchema(fields: Field[]) {
           ? z
               .array(
                 z.enum(
-                  field.options.map((o) => o.value) as [string, ...string[]],
+                  field.options.map((o: { value: string }) => o.value) as [string, ...string[]],
                 ),
               )
               .min(1)

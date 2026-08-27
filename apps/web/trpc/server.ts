@@ -1,5 +1,5 @@
-import type { ServerRouter } from "@repo/trpc/client";
-import { createTRPCProxyClient } from "@repo/trpc/client";
+import type { ServerRouter } from "@repo/api/client";
+import { createTRPCProxyClient } from "@repo/api/client";
 import { createTRPCHttpBatchClientClient } from "~/trpc/create-client";
 
 export const api = createTRPCProxyClient<ServerRouter>({

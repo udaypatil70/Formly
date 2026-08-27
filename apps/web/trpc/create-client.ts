@@ -1,4 +1,4 @@
-import { httpLink, httpBatchStreamLink } from "@repo/trpc/client";
+import { httpLink, httpBatchStreamLink } from "@repo/api/client";
 import { env } from "~/env.js";
 
 interface CreateTRPCHttpBatchClientClientOpts {

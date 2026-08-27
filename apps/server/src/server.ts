@@ -6,7 +6,7 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import { generateOpenApiDocument, createOpenApiExpressMiddleware } from "trpc-to-openapi";
 import { apiReference } from "@scalar/express-api-reference";
 
-import { serverRouter, createContext } from "@repo/trpc/server";
+import { serverRouter, createContext } from "@repo/api/server";
 import { auth } from "@repo/services/auth";
 
 import { env } from "./env";
