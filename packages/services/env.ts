@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  GOOGLE_OAUTH_CLIENT_ID: z.string(),
-  GOOGLE_OAUTH_CLIENT_SECRET: z.string(),
-  GOOGLE_OAUTH_REDIRECT_URI: z.string(),
+  BETTER_AUTH_SECRET: z.string().min(16),
+  BETTER_AUTH_URL: z.string().url().default("http://localhost:8000"),
+  GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {
