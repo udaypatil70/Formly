@@ -40,4 +40,5 @@ yarn-error.log*
 # Runtime artifacts (logs, pids, temp env dumps)
 *.log
 *.pid
+*.pid.txt
 test-env.log
