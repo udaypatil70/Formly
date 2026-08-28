@@ -21,7 +21,7 @@
     "allowJs": true,
     "checkJs": true,
     "moduleDetection": "force",
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src", "next-env.d.ts"],
   "exclude": ["node_modules"]
