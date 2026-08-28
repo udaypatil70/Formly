@@ -1,7 +1,13 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { randomUUID } from "node:crypto";
 import { db } from "@repo/db";
-import { usersTable } from "@repo/db/schema";
+import {
+  usersTable,
+  sessionsTable,
+  accountsTable,
+  verificationsTable,
+} from "@repo/db/schema";
 import { env } from "./env";
 
 export const auth = betterAuth({
@@ -9,10 +15,14 @@ export const auth = betterAuth({
     provider: "pg",
     schema: {
       user: usersTable,
+      session: sessionsTable,
+      account: accountsTable,
+      verification: verificationsTable,
     },
   }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
+  basePath: "/auth",
   emailAndPassword: {
     enabled: true,
   },
@@ -26,6 +36,12 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
+  },
+  advanced: {
+    database: {
+      // use real uuid v4 ids so they fit our `uuid` columns cleanly
+      generateId: () => randomUUID(),
+    },
   },
 });
 
