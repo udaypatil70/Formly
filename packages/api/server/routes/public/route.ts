@@ -6,6 +6,7 @@ import {
   formsTable,
   responsesTable,
   themesTable,
+  formViewsTable,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import { buildResponseSchema, AnswerValueSchema } from "@repo/validators";
@@ -111,6 +112,8 @@ export const publicRouter = router({
       const theme = await getTheme(form.themeId);
 
       const { password: _password, ...safeSettings } = form.settings ?? {};
+
+      await db.insert(formViewsTable).values({ formId: form.id }).execute();
 
       return {
         id: form.id,
