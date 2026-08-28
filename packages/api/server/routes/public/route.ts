@@ -106,7 +106,19 @@ export const publicRouter = router({
     })
     .input(getBySlugInput)
     .output(publicFormViewOutput)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`view:${hashIp(ipKey)}`, {
+        limit: 30,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
       const form = await resolveAccessibleForm(input.slug, input.password);
       const fields = await getFieldsForForm(form.id);
       const theme = await getTheme(form.themeId);
@@ -162,7 +174,7 @@ export const publicRouter = router({
       }
 
       const ipKey = ctx.ip ?? "unknown";
-      const limited = rateLimit(`submit:${hashIp(ipKey)}`, {
+      const limited = await rateLimit(`submit:${hashIp(ipKey)}`, {
         limit: 5,
         windowMs: 60_000,
       });
