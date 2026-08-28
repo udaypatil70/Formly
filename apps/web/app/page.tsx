@@ -1,7 +1,15 @@
 import { api } from "~/trpc/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
-  const { status } = await api.health.getHealth.query();
+  let status = "unavailable";
+  try {
+    const result = await api.health.getHealth.query();
+    status = result.status;
+  } catch {
+    status = "unavailable";
+  }
   return (
     <main className="min-h-screen min-w-screen flex justify-center items-center">
       <div>
