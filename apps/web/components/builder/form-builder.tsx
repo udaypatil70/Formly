@@ -1,0 +1,391 @@
+"use client";
+
+import React, { useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  type DragEndEvent,
+  type DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
+import {
+  Maximize2Icon,
+  MousePointer2Icon,
+  SaveIcon,
+  Undo2Icon,
+} from "lucide-react";
+import { toast } from "sonner";
+import type { UpdateFieldInput } from "@repo/validators";
+
+import { trpc } from "~/trpc/client";
+import type { BuilderField, BuilderTheme } from "~/lib/builder-types";
+import { Button } from "~/components/ui/button";
+import { FieldCanvas } from "./field-canvas";
+import { FieldPalette } from "./field-palette";
+import { FieldInspector } from "./field-inspector";
+import { PreviewDialog } from "./preview-dialog";
+import { toUpdateInput } from "./utils";
+import { buildPublicForm } from "./utils";
+
+export interface FormBuilderMeta {
+  id: string;
+  title: string;
+  description?: string | null;
+  slug: string;
+  status: string;
+  visibility: string;
+  themeId?: string | null;
+}
+
+interface FormBuilderProps {
+  formId: string;
+  initialMeta: FormBuilderMeta;
+  initialFields: BuilderField[];
+  initialTheme: BuilderTheme | null;
+}
+
+export function FormBuilder({
+  formId,
+  initialMeta,
+  initialFields,
+  initialTheme,
+}: FormBuilderProps) {
+  const [meta, setMeta] = useState<FormBuilderMeta>(initialMeta);
+  const [theme, setTheme] = useState<BuilderTheme | null>(initialTheme);
+  const [fields, setFields] = useState<BuilderField[]>(() =>
+    [...initialFields].sort((a, b) => a.order - b.order),
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const selectedField = fields.find((f) => f.id === selectedId) ?? null;
+
+  // ── Mutations ────────────────────────────────────────────
+  const addMutation = trpc.field.add.useMutation();
+  const updateMutation = trpc.field.update.useMutation();
+  const deleteMutation = trpc.field.delete.useMutation();
+  const reorderMutation = trpc.field.reorder.useMutation();
+  const formUpdate = trpc.form.update.useMutation();
+
+  // ── Debounced autosave for field edits ───────────────────
+  const pendingRef = useRef<Record<string, UpdateFieldInput>>({});
+  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const flushField = (id: string) => {
+    const input = pendingRef.current[id];
+    if (!input) return;
+    delete pendingRef.current[id];
+    void updateMutation.mutateAsync(toUpdateInput(input)).catch((e) => {
+      toast.error(e?.message ?? "Failed to save field");
+    });
+  };
+
+  const scheduleFieldUpdate = (id: string, patch: UpdateFieldInput) => {
+    pendingRef.current[id] = { ...pendingRef.current[id], ...patch, id };
+    if (timersRef.current[id]) clearTimeout(timersRef.current[id]);
+    timersRef.current[id] = setTimeout(() => flushField(id), 500);
+  };
+
+  const updateField = (id: string, patch: Partial<BuilderField>) => {
+    setFields((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    );
+    setSaving(true);
+    scheduleFieldUpdate(id, { ...patch } as UpdateFieldInput);
+    // reflect saving state after debounce+flush
+    setTimeout(() => setSaving(false), 700);
+  };
+
+  // ── Field actions ────────────────────────────────────────
+  const addField = (type: BuilderField["type"]) => {
+    const order = fields.length;
+    const tempId = crypto.randomUUID();
+    const label = defaultLabel(type);
+    setFields((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        type,
+        label,
+        required: false,
+        order,
+        options:
+          type === "single_select" || type === "multi_select"
+            ? [
+                { label: "Option 1", value: "option-1", order: 0 },
+                { label: "Option 2", value: "option-2", order: 1 },
+              ]
+            : undefined,
+      },
+    ]);
+    setSelectedId(tempId);
+
+    void addMutation
+      .mutateAsync({ formId, type, label, required: false, order })
+      .then((created) => {
+        setFields((prev) =>
+          prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)),
+        );
+        if (pendingRef.current[tempId]) {
+          pendingRef.current[created.id] = {
+            ...pendingRef.current[tempId],
+            id: created.id,
+          };
+          delete pendingRef.current[tempId];
+          if (timersRef.current[tempId]) {
+            clearTimeout(timersRef.current[tempId]);
+            delete timersRef.current[tempId];
+          }
+          timersRef.current[created.id] = setTimeout(
+            () => flushField(created.id),
+            500,
+          );
+        }
+        setSelectedId(created.id);
+      })
+      .catch((e) => {
+        toast.error(e?.message ?? "Failed to add field");
+        setFields((prev) => prev.filter((f) => f.id !== tempId));
+      });
+  };
+
+  const deleteField = (id: string) => {
+    setFields((prev) => prev.filter((f) => f.id !== id));
+    if (selectedId === id) setSelectedId(null);
+    void deleteMutation.mutateAsync({ id }).catch((e) => {
+      toast.error(e?.message ?? "Failed to delete field");
+    });
+  };
+
+  const duplicateField = (id: string) => {
+    const source = fields.find((f) => f.id === id);
+    if (!source) return;
+    const order = fields.length;
+    const tempId = crypto.randomUUID();
+    setFields((prev) => [
+      ...prev,
+      { ...source, id: tempId, label: `${source.label} (copy)`, order },
+    ]);
+    addMutation
+      .mutateAsync({
+        formId,
+        type: source.type,
+        label: `${source.label} (copy)`,
+        required: source.required,
+        order,
+        placeholder: source.placeholder ?? undefined,
+        helpText: source.helpText ?? undefined,
+        validationRules: source.validationRules ?? undefined,
+        conditionalLogic: source.conditionalLogic ?? undefined,
+        options: source.options?.map((o, i) => ({
+          label: o.label,
+          value: o.value,
+          order: i,
+        })),
+      })
+      .then((created) => {
+        setFields((prev) =>
+          prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)),
+        );
+      })
+      .catch((e) => {
+        toast.error(e?.message ?? "Failed to duplicate field");
+        setFields((prev) => prev.filter((f) => f.id !== tempId));
+      });
+  };
+
+  const reorderFields = (orderedIds: string[]) => {
+    setFields((prev) => {
+      const map = new Map(prev.map((f) => [f.id, f]));
+      return orderedIds
+        .map((id, order) => (map.has(id) ? { ...map.get(id)!, order } : null))
+        .filter((f): f is BuilderField => f !== null);
+    });
+    void reorderMutation
+      .mutateAsync({ formId, orderedIds })
+      .catch((e) => toast.error(e?.message ?? "Failed to save order"));
+  };
+
+  const updateMeta = (patch: Partial<FormBuilderMeta>) => {
+    setMeta((prev) => ({ ...prev, ...patch }));
+    const clean: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== null && value !== undefined) clean[key] = String(value);
+    }
+    void formUpdate
+      .mutateAsync({ ...clean, id: formId } as Parameters<typeof formUpdate.mutateAsync>[0])
+      .catch((e) => {
+        toast.error(e?.message ?? "Failed to save form");
+      });
+  };
+
+  // ── Public preview data (reuses the same renderer) ───────
+  const previewForm = useMemo(
+    () => buildPublicForm(meta, fields, theme),
+    [meta, fields, theme],
+  );
+
+  const isDirty = Object.keys(pendingRef.current).length > 0;
+
+  // ── Drag & drop (palette + reorder) ──────────────────────
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [dragType, setDragType] = useState<BuilderField["type"] | null>(null);
+
+  const onDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current;
+    if (data?.from === "palette") {
+      setDragType(data.type as BuilderField["type"]);
+    }
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setDragType(null);
+
+    if (active.data.current?.from === "palette") {
+      const type = active.data.current.type as BuilderField["type"];
+      if (type) addField(type);
+      return;
+    }
+
+    if (!over || active.id === over.id) return;
+    const ordered = [...fields].sort((a, b) => a.order - b.order).map((f) => f.id);
+    const oldIndex = ordered.indexOf(String(active.id));
+    const newIndex = ordered.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    reorderFields(arrayMove(ordered, oldIndex, newIndex));
+  };
+
+  return (
+    <div className="flex h-screen flex-col">
+      {/* Top bar */}
+      <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => (window.location.href = "/")}
+            aria-label="Back"
+          >
+            <Undo2Icon />
+          </Button>
+          <input
+            value={meta.title}
+            onChange={(e) => updateMeta({ title: e.target.value })}
+            className="min-w-0 flex-1 border-none bg-transparent text-lg font-semibold outline-none md:w-80"
+            placeholder="Untitled form"
+          />
+          <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+            {saving || isDirty ? (
+              <>
+                <SaveIcon className="size-3.5" /> Saving…
+              </>
+            ) : (
+              "Saved"
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={meta.status} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPreviewOpen(true)}
+          >
+            <Maximize2Icon /> Preview
+          </Button>
+        </div>
+      </header>
+
+      {/* 3-panel layout */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDragType(null)}
+      >
+        <div className="flex min-h-0 flex-1">
+          <FieldPalette />
+          <FieldCanvas
+            fields={fields}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onDelete={deleteField}
+            onDuplicate={duplicateField}
+          />
+          <FieldInspector
+            key={selectedField?.id ?? "none"}
+            field={selectedField}
+            fields={fields.map((f) => ({ id: f.id, label: f.label, type: f.type }))}
+            theme={theme}
+            onThemeChange={(t) => {
+              setTheme(t);
+              void formUpdate
+                .mutateAsync({ id: formId, themeId: t?.id })
+                .catch(() => undefined);
+            }}
+            onUpdate={updateField}
+            onDelete={deleteField}
+          />
+        </div>
+        {dragType ? (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center">
+            <div className="rounded-md border bg-background px-4 py-2 text-sm text-muted-foreground shadow-lg">
+              Drop to add a {dragType.replace("_", " ")} field
+            </div>
+          </div>
+        ) : null}
+      </DndContext>
+
+      <PreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        form={previewForm}
+      />
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    published: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    unpublished: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    draft: "bg-muted text-muted-foreground border-border",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${styles[status] ?? ""}`}
+    >
+      <MousePointer2Icon className="mr-1 size-3" />
+      {status}
+    </span>
+  );
+}
+
+function defaultLabel(type: BuilderField["type"]): string {
+  switch (type) {
+    case "short_text":
+      return "Short answer";
+    case "long_text":
+      return "Long answer";
+    case "email":
+      return "Email";
+    case "number":
+      return "Number";
+    case "single_select":
+      return "Select an option";
+    case "multi_select":
+      return "Choose options";
+    case "checkbox":
+      return "Checkbox";
+    case "rating":
+      return "Rating";
+    case "date":
+      return "Date";
+    default:
+      return "New field";
+  }
+}
