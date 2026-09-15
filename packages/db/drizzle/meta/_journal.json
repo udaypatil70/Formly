@@ -43,6 +43,13 @@
       "when": 1789450429604,
       "tag": "0005_lowly_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789452644084,
+      "tag": "0006_panoramic_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }
