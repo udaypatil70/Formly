@@ -3,7 +3,8 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 import type { FieldType } from "@repo/validators";
 
 import { trpc } from "~/trpc/client";
-import type { BuilderField, BuilderTheme } from "~/lib/builder-types";
+import type { BuilderField, BuilderFormSettings, BuilderTheme } from "~/lib/builder-types";
+import type { FormBuilderMeta } from "./form-builder";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -18,13 +19,15 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
-import { Empty } from "~/components/ui/empty";
 import { cn } from "~/lib/utils";
 
 interface FieldInspectorProps {
   field: BuilderField | null;
   fields: { id: string; label: string; type: FieldType }[];
   theme: BuilderTheme | null;
+  meta: FormBuilderMeta;
+  onUpdateMeta: (patch: Partial<FormBuilderMeta>) => void;
+  onSettingsChange: (patch: Partial<BuilderFormSettings>) => void;
   onThemeChange: (t: BuilderTheme | null) => void;
   onUpdate: (id: string, patch: Partial<BuilderField>) => void;
   onDelete: (id: string) => void;
@@ -47,6 +50,9 @@ export function FieldInspector({
   field,
   fields,
   theme,
+  meta,
+  onUpdateMeta,
+  onSettingsChange,
   onThemeChange,
   onUpdate,
   onDelete,
@@ -69,8 +75,11 @@ export function FieldInspector({
             />
           ) : (
             <FormSettings
+              meta={meta}
               theme={theme}
               themes={themes.data ?? []}
+              onUpdateMeta={onUpdateMeta}
+              onSettingsChange={onSettingsChange}
               onThemeChange={onThemeChange}
             />
           )}
@@ -468,25 +477,50 @@ function ConditionalEditor({
 }
 
 function FormSettings({
+  meta,
   theme,
   themes,
+  onUpdateMeta,
+  onSettingsChange,
   onThemeChange,
 }: {
+  meta: FormBuilderMeta;
   theme: BuilderTheme | null;
   themes: {
     id: string;
     name: string;
     colors: { primary: string; background: string; surface: string; text: string };
   }[];
+  onUpdateMeta: (patch: Partial<FormBuilderMeta>) => void;
+  onSettingsChange: (patch: Partial<BuilderFormSettings>) => void;
   onThemeChange: (t: BuilderTheme | null) => void;
 }) {
+  const settings = meta.settings ?? {};
+
   return (
-    <div className="flex flex-col gap-3">
-      <Empty className="min-h-0 p-4">
-        <p className="text-sm text-muted-foreground">
-          Select a field to edit its settings. Otherwise, pick a theme below.
-        </p>
-      </Empty>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-title">Title</Label>
+        <Input
+          id="form-title"
+          value={meta.title}
+          onChange={(e) => onUpdateMeta({ title: e.target.value })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-description">Description</Label>
+        <Textarea
+          id="form-description"
+          rows={3}
+          value={meta.description ?? ""}
+          placeholder="Short description shown on the form"
+          onChange={(e) => onUpdateMeta({ description: e.target.value })}
+        />
+      </div>
+
+      <Separator />
+
       <div className="flex flex-col gap-2">
         <Label>Theme</Label>
         <div className="grid grid-cols-2 gap-2">
@@ -515,6 +549,63 @@ function FormSettings({
             </button>
           ))}
         </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-thank-you">Thank-you message</Label>
+        <Textarea
+          id="form-thank-you"
+          rows={2}
+          value={settings.thankYouMessage ?? ""}
+          placeholder="Shown after someone submits this form"
+          onChange={(e) =>
+            onSettingsChange({ thankYouMessage: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-response-limit">Response limit</Label>
+        <Input
+          id="form-response-limit"
+          type="number"
+          min={1}
+          placeholder="No limit"
+          value={settings.responseLimit ?? ""}
+          onChange={(e) =>
+            onSettingsChange({
+              responseLimit:
+                e.target.value === "" ? null : Number(e.target.value),
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Stop accepting responses after this many submissions.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-expiry">Expiry date</Label>
+        <Input
+          id="form-expiry"
+          type="date"
+          value={
+            settings.expiry ? settings.expiry.slice(0, 10) : ""
+          }
+          min={new Date().toISOString().slice(0, 10)}
+          onChange={(e) =>
+            onSettingsChange({
+              expiry: e.target.value
+                ? new Date(`${e.target.value}T00:00:00`).toISOString()
+                : null,
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          The form stops accepting responses after this date.
+        </p>
       </div>
     </div>
   );

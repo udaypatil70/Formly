@@ -25,6 +25,13 @@ export interface BuilderField {
   options?: BuilderOption[];
 }
 
+export interface BuilderFormSettings {
+  password?: string;
+  expiry?: string | null;
+  responseLimit?: number | null;
+  thankYouMessage?: string;
+}
+
 export interface BuilderTheme {
   id?: string;
   name?: string;

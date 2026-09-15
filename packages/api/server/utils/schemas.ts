@@ -58,6 +58,7 @@ export const formMetaOutput = z.object({
       password: z.string().optional(),
       expiry: z.string().nullable().optional(),
       responseLimit: z.number().int().positive().optional(),
+      thankYouMessage: z.string().max(2000).optional(),
     })
     .optional(),
   createdAt: z.string(),

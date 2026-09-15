@@ -33,6 +33,7 @@ export function FormBuilderPage() {
     status: detail.data.form.status,
     visibility: detail.data.form.visibility,
     themeId: detail.data.form.themeId ?? null,
+    settings: detail.data.form.settings ?? {},
   };
 
   const fields: BuilderField[] = (detail.data.fields ?? []).map((f) => ({

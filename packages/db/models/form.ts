@@ -73,6 +73,7 @@ export const formsTable = pgTable(
         password?: string;
         expiry?: string;
         responseLimit?: number;
+        thankYouMessage?: string;
       }>()
       .default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),

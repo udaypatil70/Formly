@@ -56,5 +56,8 @@ export function buildPublicForm(
     theme: theme
       ? { colors: theme.colors }
       : null,
+    settings: meta.settings?.thankYouMessage
+      ? { thankYouMessage: meta.settings.thankYouMessage }
+      : undefined,
   };
 }

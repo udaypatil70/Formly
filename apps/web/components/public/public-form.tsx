@@ -262,7 +262,8 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
         />
         <h2 className="text-2xl font-semibold">Response submitted</h2>
         <p className="text-muted-foreground">
-          Thank you! Your response has been recorded.
+          {form.settings?.thankYouMessage?.trim() ||
+            "Thank you! Your response has been recorded."}
         </p>
         <Button variant="outline" onClick={() => window.location.reload()}>
           Submit another response

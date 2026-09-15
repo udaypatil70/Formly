@@ -30,10 +30,15 @@ export interface PublicTheme {
   };
 }
 
+export interface PublicFormSettings {
+  thankYouMessage?: string;
+}
+
 export interface PublicFormData {
   title: string;
   description?: string | null;
   requiresPassword: boolean;
   fields: PublicField[];
   theme: PublicTheme | null;
+  settings?: PublicFormSettings;
 }

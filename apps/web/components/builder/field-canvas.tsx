@@ -6,15 +6,18 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  CheckSquare2Icon,
   CopyIcon,
   GripVerticalIcon,
   PlusIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 
 import type { BuilderField } from "~/lib/builder-types";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { FieldMiniPreview, FieldStaticPreview } from "./field-mini-preview";
 
 interface FieldCanvasProps {
@@ -23,20 +26,28 @@ interface FieldCanvasProps {
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
+  selectedIds: Set<string>;
+  onToggleSelected: (id: string) => void;
+  onClearSelected: () => void;
+  onDeleteSelected: (ids: string[]) => void;
 }
 
 function SortableFieldItem({
   field,
   selected,
   isOver,
+  isSelected,
   onSelect,
+  onToggleSelected,
   onDelete,
   onDuplicate,
 }: {
   field: BuilderField;
   selected: boolean;
   isOver: boolean;
+  isSelected: boolean;
   onSelect: (id: string) => void;
+  onToggleSelected: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
 }) {
@@ -57,6 +68,7 @@ function SortableFieldItem({
       className={cn(
         "group rounded-lg border bg-card p-4 transition-shadow",
         selected && "ring-2 ring-primary",
+        isSelected && "border-primary bg-accent/30",
         isDragging && "z-10 opacity-80 shadow-lg",
         isOver && "border-primary",
       )}
@@ -71,6 +83,12 @@ function SortableFieldItem({
         >
           <GripVerticalIcon className="size-4" />
         </button>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggleSelected(field.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select ${field.label}`}
+        />
         <span className="text-sm font-medium">{field.label}</span>
         <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <Button
@@ -125,6 +143,10 @@ export function FieldCanvas({
   onSelect,
   onDelete,
   onDuplicate,
+  selectedIds,
+  onToggleSelected,
+  onClearSelected,
+  onDeleteSelected,
 }: FieldCanvasProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: "canvas",
@@ -132,12 +154,38 @@ export function FieldCanvas({
   });
 
   const ordered = [...fields].sort((a, b) => a.order - b.order);
+  const bulkCount = selectedIds.size;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-12 shrink-0 items-center border-b px-4 text-sm font-medium">
-        Form
+      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+        <span className="text-sm font-medium">Form</span>
+        {bulkCount > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CheckSquare2Icon className="size-3.5" />
+              {bulkCount} selected
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDeleteSelected([...selectedIds])}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2Icon /> Delete
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onClearSelected}
+              aria-label="Clear selection"
+            >
+              <XIcon />
+            </Button>
+          </div>
+        )}
       </div>
+
       <div
         ref={setNodeRef}
         className={cn(
@@ -171,8 +219,10 @@ export function FieldCanvas({
                   key={field.id}
                   field={field}
                   selected={selectedId === field.id}
+                  isSelected={selectedIds.has(field.id)}
                   isOver={isOver}
                   onSelect={onSelect}
+                  onToggleSelected={onToggleSelected}
                   onDelete={onDelete}
                   onDuplicate={onDuplicate}
                 />

@@ -155,6 +155,7 @@ export const CreateFormInput = z.object({
       password: z.string().min(1).optional(),
       expiry: z.string().optional(),
       responseLimit: z.number().int().positive().optional(),
+      thankYouMessage: z.string().max(2000).optional(),
     })
     .optional(),
   fields: z.array(CreateFieldInput).optional(),

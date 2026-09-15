@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   type DragEndEvent,
@@ -11,6 +11,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import {
   Maximize2Icon,
   MousePointer2Icon,
+  Redo2Icon,
   SaveIcon,
   Undo2Icon,
 } from "lucide-react";
@@ -18,14 +19,17 @@ import { toast } from "sonner";
 import type { UpdateFieldInput } from "@repo/validators";
 
 import { trpc } from "~/trpc/client";
-import type { BuilderField, BuilderTheme } from "~/lib/builder-types";
+import type {
+  BuilderField,
+  BuilderFormSettings,
+  BuilderTheme,
+} from "~/lib/builder-types";
 import { Button } from "~/components/ui/button";
 import { FieldCanvas } from "./field-canvas";
 import { FieldPalette } from "./field-palette";
 import { FieldInspector } from "./field-inspector";
 import { PreviewDialog } from "./preview-dialog";
-import { toUpdateInput } from "./utils";
-import { buildPublicForm } from "./utils";
+import { toUpdateInput, buildPublicForm } from "./utils";
 
 export interface FormBuilderMeta {
   id: string;
@@ -35,6 +39,7 @@ export interface FormBuilderMeta {
   status: string;
   visibility: string;
   themeId?: string | null;
+  settings?: BuilderFormSettings;
 }
 
 interface FormBuilderProps {
@@ -43,6 +48,8 @@ interface FormBuilderProps {
   initialFields: BuilderField[];
   initialTheme: BuilderTheme | null;
 }
+
+const MAX_HISTORY = 100;
 
 export function FormBuilder({
   formId,
@@ -61,14 +68,52 @@ export function FormBuilder({
 
   const selectedField = fields.find((f) => f.id === selectedId) ?? null;
 
-  // â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Undo / redo history ─────────────────────────────────
+  const pastRef = useRef<BuilderField[][]>([]);
+  const futureRef = useRef<BuilderField[][]>([]);
+  const [, setHistTick] = useState(0);
+  const canUndo = pastRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
+  const cloneFields = (list: BuilderField[]) => list.map((f) => ({ ...f }));
+  const bumpHistory = () => setHistTick((t) => t + 1);
+
+  const recordHistory = () => {
+    pastRef.current.push(cloneFields(fields));
+    if (pastRef.current.length > MAX_HISTORY) pastRef.current.shift();
+    futureRef.current = [];
+    liveEditRef.current = null;
+    bumpHistory();
+  };
+
+  const undo = () => {
+    const prev = pastRef.current.pop();
+    if (!prev) return;
+    futureRef.current.push(cloneFields(fields));
+    liveEditRef.current = null;
+    setSelectedId(null);
+    setFields(prev);
+    bumpHistory();
+  };
+
+  const redo = () => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    pastRef.current.push(cloneFields(fields));
+    liveEditRef.current = null;
+    setSelectedId(null);
+    setFields(next);
+    bumpHistory();
+  };
+
+  // ─── Mutations ───────────────────────────────────────────
   const addMutation = trpc.field.add.useMutation();
   const updateMutation = trpc.field.update.useMutation();
   const deleteMutation = trpc.field.delete.useMutation();
   const reorderMutation = trpc.field.reorder.useMutation();
   const formUpdate = trpc.form.update.useMutation();
 
-  // â”€â”€ Debounced autosave for field edits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Debounced autosave for field edits ──────────────────
   const pendingRef = useRef<Record<string, UpdateFieldInput>>({});
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -87,7 +132,14 @@ export function FormBuilder({
     timersRef.current[id] = setTimeout(() => flushField(id), 500);
   };
 
+  // Groups consecutive keystrokes on the same field into a single undo step.
+  const liveEditRef = useRef<{ fieldId: string | null } | null>(null);
+
   const updateField = (id: string, patch: Partial<BuilderField>) => {
+    if (liveEditRef.current?.fieldId !== id) {
+      recordHistory();
+      liveEditRef.current = { fieldId: id };
+    }
     setFields((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
     );
@@ -97,11 +149,12 @@ export function FormBuilder({
     setTimeout(() => setSaving(false), 700);
   };
 
-  // â”€â”€ Field actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Field actions ───────────────────────────────────────
   const addField = (type: BuilderField["type"]) => {
     const order = fields.length;
     const tempId = crypto.randomUUID();
     const label = defaultLabel(type);
+    recordHistory();
     setFields((prev) => [
       ...prev,
       {
@@ -153,8 +206,14 @@ export function FormBuilder({
   };
 
   const deleteField = (id: string) => {
+    recordHistory();
     setFields((prev) => prev.filter((f) => f.id !== id));
     if (selectedId === id) setSelectedId(null);
+    setMultiSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     void deleteMutation.mutateAsync({ id }).catch((e) => {
       toast.error(e?.message ?? "Failed to delete field");
     });
@@ -165,6 +224,7 @@ export function FormBuilder({
     if (!source) return;
     const order = fields.length;
     const tempId = crypto.randomUUID();
+    recordHistory();
     setFields((prev) => [
       ...prev,
       { ...source, id: tempId, label: `${source.label} (copy)`, order },
@@ -198,6 +258,7 @@ export function FormBuilder({
   };
 
   const reorderFields = (orderedIds: string[]) => {
+    recordHistory();
     setFields((prev) => {
       const map = new Map(prev.map((f) => [f.id, f]));
       return orderedIds
@@ -209,6 +270,46 @@ export function FormBuilder({
       .catch((e) => toast.error(e?.message ?? "Failed to save order"));
   };
 
+  // ─── Multi-select bulk delete ────────────────────────────
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const toggleSelected = (id: string) => {
+    setMultiSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    setMultiSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(fields.map((f) => f.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [fields]);
+
+  const deleteSelected = (ids: string[]) => {
+    if (ids.length === 0) return;
+    recordHistory();
+    setFields((prev) => prev.filter((f) => !ids.includes(f.id)));
+    setMultiSelected(new Set());
+    if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+    void Promise.allSettled(
+      ids.map((id) => deleteMutation.mutateAsync({ id })),
+    ).then((results) => {
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0) {
+        toast.error(`Failed to delete ${failed.length} field(s)`);
+      }
+    });
+  };
+
+  // ─── Form metadata + settings ────────────────────────────
   const updateMeta = (patch: Partial<FormBuilderMeta>) => {
     setMeta((prev) => ({ ...prev, ...patch }));
     const clean: Record<string, string | undefined> = {};
@@ -222,7 +323,25 @@ export function FormBuilder({
       });
   };
 
-  // â”€â”€ Public preview data (reuses the same renderer) â”€â”€â”€â”€â”€â”€â”€
+  const updateSettings = (patch: Partial<BuilderFormSettings>) => {
+    setMeta((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, ...patch },
+    }));
+    const settings: Record<string, unknown> = { ...meta.settings, ...patch };
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === null || value === undefined || value === "") {
+        delete settings[key];
+      }
+    }
+    void formUpdate
+      .mutateAsync({ id: formId, settings } as Parameters<typeof formUpdate.mutateAsync>[0])
+      .catch((e) => {
+        toast.error(e?.message ?? "Failed to save settings");
+      });
+  };
+
+  // ─── Public preview data (reuses the same renderer) ──────
   const previewForm = useMemo(
     () => buildPublicForm(meta, fields, theme),
     [meta, fields, theme],
@@ -230,7 +349,7 @@ export function FormBuilder({
 
   const isDirty = Object.keys(pendingRef.current).length > 0;
 
-  // â”€â”€ Drag & drop (palette + reorder) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Drag & drop (palette + reorder) ─────────────────────
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [dragType, setDragType] = useState<BuilderField["type"] | null>(null);
 
@@ -281,14 +400,34 @@ export function FormBuilder({
           <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
             {saving || isDirty ? (
               <>
-                <SaveIcon className="size-3.5" /> Savingâ€¦
+                <SaveIcon className="size-3.5" /> Saving…
               </>
             ) : (
               "Saved"
             )}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={undo}
+            disabled={!canUndo}
+            aria-label="Undo"
+            title="Undo"
+          >
+            <Undo2Icon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={redo}
+            disabled={!canRedo}
+            aria-label="Redo"
+            title="Redo"
+          >
+            <Redo2Icon />
+          </Button>
           <StatusBadge status={meta.status} />
           <Button
             variant="outline"
@@ -315,12 +454,19 @@ export function FormBuilder({
             onSelect={setSelectedId}
             onDelete={deleteField}
             onDuplicate={duplicateField}
+            selectedIds={multiSelected}
+            onToggleSelected={toggleSelected}
+            onClearSelected={() => setMultiSelected(new Set())}
+            onDeleteSelected={deleteSelected}
           />
           <FieldInspector
             key={selectedField?.id ?? "none"}
             field={selectedField}
             fields={fields.map((f) => ({ id: f.id, label: f.label, type: f.type }))}
             theme={theme}
+            meta={meta}
+            onUpdateMeta={updateMeta}
+            onSettingsChange={updateSettings}
             onThemeChange={(t) => {
               setTheme(t);
               void formUpdate

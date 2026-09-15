@@ -36,6 +36,7 @@ const publicFormViewOutput = z.object({
     .object({
       expiry: z.string().nullable().optional(),
       responseLimit: z.number().int().positive().optional(),
+      thankYouMessage: z.string().nullable().optional(),
     })
     .optional(),
   requiresPassword: z.boolean(),
