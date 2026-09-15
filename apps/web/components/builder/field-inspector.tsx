@@ -101,7 +101,37 @@ function FieldSettings({
   onUpdate: (id: string, patch: Partial<BuilderField>) => void;
   onDelete: (id: string) => void;
 }) {
-  const otherFields = fields.filter((f) => f.id !== field.id);
+  const otherFields = fields.filter(
+    (f) => f.id !== field.id && f.type !== "page_break",
+  );
+
+  if (field.type === "page_break") {
+    return (
+      <>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="field-label">Label</Label>
+          <Input
+            id="field-label"
+            value={field.label}
+            onChange={(e) => onUpdate(field.id, { label: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Questions after this divider appear on a new page, with a progress
+            bar and step navigation in the preview.
+          </p>
+        </div>
+        <Separator />
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => onDelete(field.id)}
+        >
+          <Trash2Icon /> Remove page break
+        </Button>
+      </>
+    );
+  }
+
   const acceptsText = field.type === "short_text" || field.type === "long_text";
   const acceptsNumber = field.type === "number";
   const hasOptions =

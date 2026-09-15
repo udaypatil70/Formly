@@ -533,6 +533,8 @@ function defaultLabel(type: BuilderField["type"]): string {
       return "Rating";
     case "date":
       return "Date";
+    case "page_break":
+      return "Page break";
     default:
       return "New field";
   }

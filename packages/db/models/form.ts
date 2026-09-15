@@ -37,6 +37,7 @@ export const fieldTypeEnum = pgEnum("field_type", [
   "radio",
   "rating",
   "date",
+  "page_break",
 ]);
 
 export const themeCategoryEnum = pgEnum("theme_category", [

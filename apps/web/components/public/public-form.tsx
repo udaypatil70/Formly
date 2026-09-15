@@ -22,6 +22,7 @@ import type { PublicField, PublicFormData } from "./types";
 interface PublicFormProps {
   form: PublicFormData;
   onSubmit: (values: Record<string, unknown>) => Promise<void>;
+  onReset?: () => void;
 }
 
 function fieldIsVisible(field: PublicField, values: Record<string, unknown>): boolean {
@@ -224,11 +225,16 @@ function FieldInput({
   }
 }
 
-export function PublicForm({ form, onSubmit }: PublicFormProps) {
+export function PublicForm({
+  form,
+  onSubmit,
+  onReset,
+}: PublicFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
 
   const schema = useMemo(() => {
     const fields: Field[] = form.fields.map((f, index) => ({
@@ -250,9 +256,45 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
     return buildResponseSchema(fields);
   }, [form.fields]);
 
-  const visibleFields = form.fields.filter((f) =>
-    fieldIsVisible(f as PublicField, values),
+  // Split the form into pages at type === "page_break" dividers.
+  const pages = useMemo<PublicField[][]>(() => {
+    const result: PublicField[][] = [[]];
+    for (const f of form.fields) {
+      if (f.type === "page_break") {
+        result.push([]);
+        continue;
+      }
+      result[result.length - 1]!.push(f);
+    }
+    return result.filter((page) => page.length > 0);
+  }, [form.fields]);
+
+  const totalPages = pages.length;
+  const isMultipage = totalPages > 1;
+  const safePage = Math.min(currentPage, Math.max(totalPages - 1, 0));
+  const pageFields = (totalPages > 0 ? pages[safePage]! : []).filter((f) =>
+    fieldIsVisible(f, values),
   );
+
+  const buildPageSchema = (fields: PublicField[]) => {
+    const mapped: Field[] = fields.map((f, index) => ({
+      id: f.id,
+      formId: "preview",
+      type: f.type,
+      label: f.label,
+      required: f.required,
+      order: index,
+      validationRules: f.validationRules,
+      conditionalLogic: f.conditionalLogic,
+      options: f.options?.map((o, oi) => ({
+        id: `${f.id}-${oi}`,
+        label: o.label,
+        value: o.value,
+        order: oi,
+      })),
+    }));
+    return buildResponseSchema(mapped);
+  };
 
   if (submitted) {
     return (
@@ -266,12 +308,43 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
           {form.settings?.thankYouMessage?.trim() ||
             "Thank you! Your response has been recorded."}
         </p>
-        <Button variant="outline" onClick={() => window.location.reload()}>
+        <Button variant="outline" onClick={() => onReset?.() ?? window.location.reload()}>
           Submit another response
         </Button>
       </div>
     );
   }
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const validatePage = (fields: PublicField[]): boolean => {
+    const result = buildPageSchema(fields).safeParse(values);
+    if (!result.success) {
+      const nextErrors: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        const path = String(issue.path[0] ?? "");
+        if (path && !nextErrors[path]) nextErrors[path] = issue.message;
+      }
+      setErrors(nextErrors);
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!validatePage(pageFields)) return;
+    goToPage(safePage + 1);
+  };
+
+  const handleBack = (e: React.MouseEvent) => {
+    e.preventDefault();
+    goToPage(safePage - 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -331,8 +404,31 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
             <p className="mt-2 text-xs opacity-60">Password protected form</p>
           ) : null}
 
+          {isMultipage && (
+            <div className="mt-6">
+              <div className="mb-1.5 flex items-center justify-between text-xs opacity-70">
+                <span>
+                  Page {safePage + 1} of {totalPages}
+                </span>
+                <span>{Math.round(((safePage + 1) / totalPages) * 100)}%</span>
+              </div>
+              <div
+                className="h-1.5 w-full overflow-hidden rounded-full"
+                style={{ backgroundColor: `${primary}2a` }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    backgroundColor: primary,
+                    width: `${((safePage + 1) / totalPages) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-            {visibleFields.map((field) => (
+            {pageFields.map((field) => (
               <div key={field.id} className="flex flex-col gap-2">
                 <div className="flex items-center gap-1">
                   <Label htmlFor={field.id}>
@@ -354,14 +450,37 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
               </div>
             ))}
 
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full"
-              style={{ backgroundColor: primary }}
-            >
-              {submitting ? "Submitting..." : "Submit"}
-            </Button>
+            <div className="flex items-center gap-3">
+              {isMultipage && safePage > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={submitting}
+                >
+                  Back
+                </Button>
+              ) : null}
+              {isMultipage && safePage < totalPages - 1 ? (
+                <Button
+                  type="button"
+                  onClick={handleNext}
+                  className="flex-1"
+                  style={{ backgroundColor: primary }}
+                >
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1"
+                  style={{ backgroundColor: primary }}
+                >
+                  {submitting ? "Submitting..." : "Submit"}
+                </Button>
+              )}
+            </div>
           </form>
         </div>
       </div>

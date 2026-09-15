@@ -6,6 +6,7 @@ import {
   HashIcon,
   ListChecksIcon,
   MailIcon,
+  SeparatorHorizontalIcon,
   SquareCheckIcon,
   StarIcon,
   TypeIcon,
@@ -31,6 +32,7 @@ export const PALETTE_ITEMS: {
   { type: "radio", label: "Radio", icon: CircleDotIcon },
   { type: "rating", label: "Rating", icon: StarIcon },
   { type: "date", label: "Date", icon: CalendarIcon },
+  { type: "page_break", label: "Page break", icon: SeparatorHorizontalIcon },
 ];
 
 export const PALETTE_GROUPS: {
@@ -48,6 +50,10 @@ export const PALETTE_GROUPS: {
     items: PALETTE_ITEMS.filter(
       ({ type }) => !["short_text", "long_text", "email", "number"].includes(type),
     ),
+  },
+  {
+    label: "Layout",
+    items: PALETTE_ITEMS.filter(({ type }) => type === "page_break"),
   },
 ];
 

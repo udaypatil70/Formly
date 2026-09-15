@@ -13,6 +13,7 @@ export const FieldType = z.enum([
   "radio",
   "rating",
   "date",
+  "page_break",
 ]);
 export type FieldType = z.infer<typeof FieldType>;
 
@@ -275,6 +276,7 @@ export function buildResponseSchema(fields: Field[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const field of fields) {
+    if (field.type === "page_break") continue;
     shape[field.id] = buildFieldValidator(field);
   }
 

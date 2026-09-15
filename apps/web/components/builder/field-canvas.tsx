@@ -10,6 +10,7 @@ import {
   CopyIcon,
   GripVerticalIcon,
   PlusIcon,
+  SeparatorHorizontalIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -118,11 +119,20 @@ function SortableFieldItem({
       </div>
 
       <div className="mb-2">
-        {field.type === "single_select" ||
-        field.type === "multi_select" ||
-        field.type === "radio" ||
-        field.type === "rating" ||
-        field.type === "checkbox" ? (
+        {field.type === "page_break" ? (
+          <div className="flex items-center gap-3 py-0.5 text-muted-foreground">
+            <span className="h-px flex-1 border-t border-dashed" />
+            <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide">
+              <SeparatorHorizontalIcon className="size-3.5" />
+              {field.label || "Page break"}
+            </span>
+            <span className="h-px flex-1 border-t border-dashed" />
+          </div>
+        ) : field.type === "single_select" ||
+          field.type === "multi_select" ||
+          field.type === "radio" ||
+          field.type === "rating" ||
+          field.type === "checkbox" ? (
           <FieldStaticPreview field={field} />
         ) : (
           <FieldMiniPreview field={field} />
@@ -130,7 +140,13 @@ function SortableFieldItem({
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{field.required ? "Required" : "Optional"}</span>
+        <span>
+          {field.type === "page_break"
+            ? "Starts a new page"
+            : field.required
+              ? "Required"
+              : "Optional"}
+        </span>
         <span className="capitalize">{field.type.replace("_", " ")}</span>
       </div>
     </div>
