@@ -19,7 +19,7 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
-import { cn } from "~/lib/utils";
+import { mapTheme, ThemeSection } from "./theme-editor";
 
 interface FieldInspectorProps {
   field: BuilderField | null;
@@ -58,6 +58,7 @@ export function FieldInspector({
   onDelete,
 }: FieldInspectorProps) {
   const themes = trpc.theme.getAll.useQuery();
+  const themeList: BuilderTheme[] = themes.data ? themes.data.map(mapTheme) : [];
 
   return (
     <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
@@ -77,7 +78,7 @@ export function FieldInspector({
             <FormSettings
               meta={meta}
               theme={theme}
-              themes={themes.data ?? []}
+              themes={themeList}
               onUpdateMeta={onUpdateMeta}
               onSettingsChange={onSettingsChange}
               onThemeChange={onThemeChange}
@@ -486,11 +487,7 @@ function FormSettings({
 }: {
   meta: FormBuilderMeta;
   theme: BuilderTheme | null;
-  themes: {
-    id: string;
-    name: string;
-    colors: { primary: string; background: string; surface: string; text: string };
-  }[];
+  themes: BuilderTheme[];
   onUpdateMeta: (patch: Partial<FormBuilderMeta>) => void;
   onSettingsChange: (patch: Partial<BuilderFormSettings>) => void;
   onThemeChange: (t: BuilderTheme | null) => void;
@@ -521,35 +518,7 @@ function FormSettings({
 
       <Separator />
 
-      <div className="flex flex-col gap-2">
-        <Label>Theme</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {themes.map((t) => (
-            <button
-              key={t.id}
-              onClick={() =>
-                onThemeChange({
-                  id: t.id,
-                  name: t.name,
-                  colors: t.colors,
-                })
-              }
-              className={cn(
-                "flex flex-col gap-1 rounded-md border p-2 text-left transition-colors hover:bg-accent",
-                theme?.id === t.id && "border-primary",
-              )}
-            >
-              <span
-                className="h-6 w-full rounded"
-                style={{
-                  background: `linear-gradient(90deg, ${t.colors.primary}, ${t.colors.surface})`,
-                }}
-              />
-              <span className="truncate text-xs">{t.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <ThemeSection themes={themes} selected={theme} meta={meta} onSelect={onThemeChange} />
 
       <Separator />
 

@@ -46,6 +46,8 @@ export function PublicFormPage() {
     theme: data.data.theme
       ? {
           colors: data.data.theme.colors,
+          font: data.data.theme.font ?? null,
+          background: data.data.theme.background ?? null,
         }
       : null,
     fields: data.data.fields.map((f) => ({

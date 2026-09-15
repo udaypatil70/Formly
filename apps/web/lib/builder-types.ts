@@ -32,14 +32,24 @@ export interface BuilderFormSettings {
   thankYouMessage?: string;
 }
 
+export interface ThemeColorSet {
+  primary: string;
+  background: string;
+  surface: string;
+  text: string;
+}
+
+export type BuilderThemeBackground =
+  | { type: "solid"; color: string }
+  | { type: "gradient"; from: string; to: string }
+  | { type: "image"; url: string };
+
 export interface BuilderTheme {
   id?: string;
   name?: string;
   category?: string;
-  colors: {
-    primary: string;
-    background: string;
-    surface: string;
-    text: string;
-  };
+  ownerId?: string | null;
+  font?: string | null;
+  colors: ThemeColorSet;
+  background?: BuilderThemeBackground | null;
 }

@@ -88,10 +88,19 @@ export const formsTable = pgTable(
 
 // ─── Themes ───────────────────────────────────────────────
 
+export type ThemeBackground =
+  | { type: "solid"; color: string }
+  | { type: "gradient"; from: string; to: string }
+  | { type: "image"; url: string };
+
 export const themesTable = pgTable("themes", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id").references(() => usersTable.id, {
+    onDelete: "cascade",
+  }),
   name: varchar("name", { length: 100 }).notNull(),
-  category: themeCategoryEnum("category").notNull(),
+  category: themeCategoryEnum("category").default("community").notNull(),
+  font: varchar("font", { length: 100 }),
   colors: jsonb("colors")
     .$type<{
       primary: string;
@@ -100,6 +109,7 @@ export const themesTable = pgTable("themes", {
       text: string;
     }>()
     .notNull(),
+  background: jsonb("background").$type<ThemeBackground>(),
 });
 
 // ─── Fields ───────────────────────────────────────────────

@@ -16,6 +16,7 @@ import {
 } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
 import type { PublicField, PublicFormData } from "./types";
 
 interface PublicFormProps {
@@ -305,12 +306,18 @@ export function PublicForm({ form, onSubmit }: PublicFormProps) {
   };
 
   const primary = form.theme?.colors.primary ?? "#6d28d9";
-  const background = form.theme?.colors.background ?? "#0b0b0d";
   const surface = form.theme?.colors.surface ?? "#18181b";
   const text = form.theme?.colors.text ?? "#fafafa";
 
   return (
-    <div style={{ backgroundColor: background, color: text }}>
+    <div
+      style={{
+        ...backgroundStyle(form.theme),
+        color: text,
+        fontFamily: fontFamilyFor(form.theme?.font),
+        minHeight: "100%",
+      }}
+    >
       <div className="mx-auto w-full max-w-xl px-4 py-12">
         <div
           className="rounded-2xl border p-6 sm:p-8"

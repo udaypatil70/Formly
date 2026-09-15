@@ -1,25 +1,61 @@
 import { z } from "zod";
 import { FieldType } from "@repo/validators";
 
+const themeCategories = [
+  "movies",
+  "anime",
+  "games",
+  "startups",
+  "tech",
+  "os",
+  "events",
+  "community",
+] as const;
+
+export const themeBackgroundOutput = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("solid"), color: z.string() }),
+  z.object({ type: z.literal("gradient"), from: z.string(), to: z.string() }),
+  z.object({ type: z.literal("image"), url: z.string() }),
+]);
+
 export const themeOutput = z.object({
   id: z.string().uuid(),
+  ownerId: z.string().uuid().nullable().optional(),
   name: z.string(),
-  category: z.enum([
-    "movies",
-    "anime",
-    "games",
-    "startups",
-    "tech",
-    "os",
-    "events",
-    "community",
-  ]),
+  category: z.enum(themeCategories),
+  font: z.string().nullable().optional(),
   colors: z.object({
     primary: z.string(),
     background: z.string(),
     surface: z.string(),
     text: z.string(),
   }),
+  background: themeBackgroundOutput.nullable().optional(),
+});
+
+export const themeColorInput = z.object({
+  primary: z.string().min(1).max(50),
+  background: z.string().min(1).max(50),
+  surface: z.string().min(1).max(50),
+  text: z.string().min(1).max(50),
+});
+
+export const themeBackgroundInput = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("solid"), color: z.string().min(1).max(50) }),
+  z.object({ type: z.literal("gradient"), from: z.string().min(1).max(50), to: z.string().min(1).max(50) }),
+  z.object({ type: z.literal("image"), url: z.string().min(1).max(500) }),
+]);
+
+export const themeCreateInput = z.object({
+  name: z.string().min(1).max(100),
+  category: z.enum(themeCategories).optional(),
+  font: z.string().max(100).optional(),
+  colors: themeColorInput,
+  background: themeBackgroundInput.optional(),
+});
+
+export const themeUpdateInput = themeCreateInput.partial().extend({
+  id: z.string().uuid(),
 });
 
 export const fieldOptionOutput = z.object({

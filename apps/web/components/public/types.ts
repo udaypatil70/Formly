@@ -3,6 +3,7 @@ import type {
   FieldType,
   ValidationRules,
 } from "@repo/validators";
+import type { BuilderThemeBackground, ThemeColorSet } from "~/lib/builder-types";
 
 export interface PublicOption {
   value: string;
@@ -22,12 +23,9 @@ export interface PublicField {
 }
 
 export interface PublicTheme {
-  colors: {
-    primary: string;
-    background: string;
-    surface: string;
-    text: string;
-  };
+  colors: ThemeColorSet;
+  font?: string | null;
+  background?: BuilderThemeBackground | null;
 }
 
 export interface PublicFormSettings {

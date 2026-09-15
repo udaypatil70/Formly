@@ -67,6 +67,8 @@ export function FormBuilderPage() {
         name: detail.data.theme.name,
         category: detail.data.theme.category,
         colors: detail.data.theme.colors,
+        font: detail.data.theme.font ?? null,
+        background: detail.data.theme.background ?? null,
       }
     : null;
 

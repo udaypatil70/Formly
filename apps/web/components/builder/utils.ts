@@ -54,7 +54,7 @@ export function buildPublicForm(
     requiresPassword: false,
     fields: publicFields,
     theme: theme
-      ? { colors: theme.colors }
+      ? { colors: theme.colors, font: theme.font ?? null, background: theme.background ?? null }
       : null,
     settings: meta.settings?.thankYouMessage
       ? { thankYouMessage: meta.settings.thankYouMessage }
