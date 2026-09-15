@@ -102,6 +102,7 @@ function SortableFieldItem({
       <div className="mb-2">
         {field.type === "single_select" ||
         field.type === "multi_select" ||
+        field.type === "radio" ||
         field.type === "rating" ||
         field.type === "checkbox" ? (
           <FieldStaticPreview field={field} />

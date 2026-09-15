@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { buildResponseSchema, type Field } from "@repo/validators";
-import { CheckCircle2Icon } from "lucide-react";
+import { CheckCircle2Icon, StarIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -162,26 +163,59 @@ function FieldInput({
           onCheckedChange={(checked) => onChange(Boolean(checked))}
         />
       );
+    case "radio": {
+      const options = field.options ?? [];
+      return (
+        <RadioGroup
+          value={
+            typeof value === "string" ? (value as string) : undefined
+          }
+          onValueChange={(v) => onChange(v)}
+          className="gap-2"
+        >
+          {options.length === 0 ? (
+            <Input
+              value={typeof value === "string" ? value : ""}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="Options not configured"
+            />
+          ) : (
+            options.map((opt) => (
+              <Label
+                key={opt.value}
+                className="flex items-center gap-2 font-normal"
+              >
+                <RadioGroupItem value={opt.value} />
+                {opt.label}
+              </Label>
+            ))
+          )}
+        </RadioGroup>
+      );
+    }
     case "rating":
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
               onClick={() => onChange(n)}
-              className={cn(
-                "size-9 rounded-md border text-sm font-medium transition-colors",
-                value === n
-                  ? "border-transparent text-white"
-                  : "border-input bg-transparent hover:bg-accent",
-              )}
-              style={value === n ? { background: "var(--primary)" } : undefined}
-              aria-label={`${n} stars`}
+              aria-label={`${n} star${n === 1 ? "" : "s"}`}
+              className="text-muted-foreground transition-colors hover:text-foreground"
             >
-              {n}
+              <StarIcon
+                className={cn(
+                  "size-6",
+                  (typeof value === "number" ? n <= value : false) &&
+                    "fill-primary text-primary",
+                )}
+              />
             </button>
           ))}
+          <span className="ml-2 text-sm text-muted-foreground">
+            {typeof value === "number" ? `${value}/5` : ""}
+          </span>
         </div>
       );
     default:

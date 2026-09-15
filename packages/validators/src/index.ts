@@ -10,6 +10,7 @@ export const FieldType = z.enum([
   "single_select",
   "multi_select",
   "checkbox",
+  "radio",
   "rating",
   "date",
 ]);
@@ -216,7 +217,8 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
       break;
     }
 
-    case "single_select": {
+    case "single_select":
+    case "radio": {
       const values = field.options?.map((o: FieldOption) => o.value);
       validator =
         values && values.length > 0

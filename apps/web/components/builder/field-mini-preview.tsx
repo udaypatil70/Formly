@@ -2,6 +2,7 @@ import type { BuilderField } from "~/lib/builder-types";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 
 interface FieldMiniPreviewProps {
@@ -78,6 +79,21 @@ export function FieldStaticPreview({ field }: { field: BuilderField }) {
         value=""
         placeholder={field.options[0]?.label ?? "Select an option"}
       />
+    );
+  }
+  if (field.type === "radio" && field.options) {
+    return (
+      <RadioGroup defaultValue="" disabled className="gap-1.5">
+        {field.options.map((o) => (
+          <Label
+            key={o.value}
+            className="flex items-center gap-2 font-normal text-sm text-muted-foreground"
+          >
+            <RadioGroupItem value={o.value} disabled />
+            {o.label}
+          </Label>
+        ))}
+      </RadioGroup>
     );
   }
   return null;

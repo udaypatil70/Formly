@@ -111,7 +111,9 @@ export function FormBuilder({
         required: false,
         order,
         options:
-          type === "single_select" || type === "multi_select"
+          type === "single_select" ||
+          type === "multi_select" ||
+          type === "radio"
             ? [
                 { label: "Option 1", value: "option-1", order: 0 },
                 { label: "Option 2", value: "option-2", order: 1 },
@@ -379,6 +381,8 @@ function defaultLabel(type: BuilderField["type"]): string {
       return "Choose options";
     case "checkbox":
       return "Checkbox";
+    case "radio":
+      return "Multiple choice";
     case "rating":
       return "Rating";
     case "date":

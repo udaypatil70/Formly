@@ -2,6 +2,7 @@ import {
   AlignLeftIcon,
   CalendarIcon,
   ChevronDownIcon,
+  CircleDotIcon,
   HashIcon,
   ListChecksIcon,
   MailIcon,
@@ -27,8 +28,27 @@ export const PALETTE_ITEMS: {
   { type: "single_select", label: "Dropdown", icon: ChevronDownIcon },
   { type: "multi_select", label: "Multiple Choice", icon: ListChecksIcon },
   { type: "checkbox", label: "Checkbox", icon: SquareCheckIcon },
+  { type: "radio", label: "Radio", icon: CircleDotIcon },
   { type: "rating", label: "Rating", icon: StarIcon },
   { type: "date", label: "Date", icon: CalendarIcon },
+];
+
+export const PALETTE_GROUPS: {
+  label: string;
+  items: (typeof PALETTE_ITEMS)[number][];
+}[] = [
+  {
+    label: "Basic fields",
+    items: PALETTE_ITEMS.filter(({ type }) =>
+      ["short_text", "long_text", "email", "number"].includes(type),
+    ),
+  },
+  {
+    label: "More",
+    items: PALETTE_ITEMS.filter(
+      ({ type }) => !["short_text", "long_text", "email", "number"].includes(type),
+    ),
+  },
 ];
 
 function PaletteItem({ type, label, icon: Icon }: (typeof PALETTE_ITEMS)[number]) {
@@ -61,9 +81,16 @@ export function FieldPalette() {
         Field types
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-1.5 px-3 pb-4">
-          {PALETTE_ITEMS.map((item) => (
-            <PaletteItem key={item.type} {...item} />
+        <div className="flex flex-col gap-4 px-3 pb-4">
+          {PALETTE_GROUPS.map((group) => (
+            <div key={group.label} className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {group.label}
+              </p>
+              {group.items.map((item) => (
+                <PaletteItem key={item.type} {...item} />
+              ))}
+            </div>
           ))}
         </div>
         <p className="px-3 pb-3 text-xs text-muted-foreground">

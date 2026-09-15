@@ -38,6 +38,7 @@ const FIELD_TYPES: FieldType[] = [
   "single_select",
   "multi_select",
   "checkbox",
+  "radio",
   "rating",
   "date",
 ];
@@ -94,7 +95,9 @@ function FieldSettings({
   const acceptsText = field.type === "short_text" || field.type === "long_text";
   const acceptsNumber = field.type === "number";
   const hasOptions =
-    field.type === "single_select" || field.type === "multi_select";
+    field.type === "single_select" ||
+    field.type === "multi_select" ||
+    field.type === "radio";
 
   return (
     <>
@@ -129,7 +132,8 @@ function FieldSettings({
       {field.type !== "checkbox" &&
         field.type !== "rating" &&
         field.type !== "single_select" &&
-        field.type !== "multi_select" && (
+        field.type !== "multi_select" &&
+        field.type !== "radio" && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="field-placeholder">Placeholder</Label>
             <Input
@@ -143,7 +147,8 @@ function FieldSettings({
       {field.type !== "rating" &&
         field.type !== "checkbox" &&
         field.type !== "single_select" &&
-        field.type !== "multi_select" && (
+        field.type !== "multi_select" &&
+        field.type !== "radio" && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="field-help">Help text</Label>
             <Textarea

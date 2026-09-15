@@ -34,6 +34,7 @@ export const fieldTypeEnum = pgEnum("field_type", [
   "single_select",
   "multi_select",
   "checkbox",
+  "radio",
   "rating",
   "date",
 ]);
