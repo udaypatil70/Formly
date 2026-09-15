@@ -1,26 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeftIcon, FilePlus2Icon, Loader2Icon, SparklesIcon } from "lucide-react";
+import { toast } from "sonner";
+
+import { api } from "~/trpc/server";
+import { trpc } from "~/trpc/client";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { api } from "~/trpc/client";
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 255);
 
 export default function CreateFormPage() {
   const router = useRouter();
+  const session = trpc.auth.getSession.useQuery();
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!session.isLoading && session.data?.user === null) {
+      router.replace("/login");
+    }
+  }, [session.isLoading, session.data?.user, router]);
+
+  const effectiveSlug = slugTouched && slug.trim() ? slugify(slug) : slugify(title);
 
   const handleCreateForm = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
       setError("Form title is required");
       return;
     }
@@ -30,12 +61,12 @@ export default function CreateFormPage() {
 
     try {
       const newForm = await api.form.create.mutate({
-        title: title.trim(),
+        title: trimmedTitle,
         description: description.trim() || undefined,
-        slug: slug.trim() || undefined,
+        slug: effectiveSlug || undefined,
         visibility: "public",
       });
-
+      toast.success("Form created");
       router.push(`/builder/${newForm.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create form");
@@ -43,39 +74,63 @@ export default function CreateFormPage() {
     }
   };
 
+  if (session.isLoading) {
+    return (
+      <div className="flex min-h-svh items-center justify-center">
+        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-8">
-          <Button variant="outline" onClick={() => router.push("/")} className="mb-6">
-            ← Back to Dashboard
+    <div className="relative flex min-h-svh flex-col items-center justify-center px-4 py-12">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="bg-primary/10 absolute -top-40 left-1/2 h-80 w-[40rem] -translate-x-1/2 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-xl">
+        <div className="mb-6 flex items-center justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/")}
+            className="text-muted-foreground -ml-2"
+          >
+            <ArrowLeftIcon />
+            Back to dashboard
           </Button>
         </div>
 
-        <Card>
+        <Card className="border-border/60 bg-card/60 shadow-xl backdrop-blur">
           <CardHeader>
-            <CardTitle className="text-2xl">Create a New Form</CardTitle>
+            <div className="mb-2 flex size-11 items-center justify-center rounded-xl border bg-primary/10 text-primary">
+              <FilePlus2Icon className="size-5" />
+            </div>
+            <CardTitle className="text-xl">Create a new form</CardTitle>
             <CardDescription>
-              Start building your form by providing basic information
+              Give your form a name — you can add fields right after.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleCreateForm} className="space-y-6">
+            <form onSubmit={handleCreateForm} className="space-y-5">
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="title">Form Title *</Label>
+                <Label htmlFor="title">Form title</Label>
                 <Input
                   id="title"
-                  placeholder="Enter form title"
+                  placeholder="e.g. Customer feedback survey"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setError("");
+                  }}
                   disabled={loading}
-                  required
+                  autoFocus
+                  className="h-10"
                 />
               </div>
 
@@ -83,32 +138,45 @@ export default function CreateFormPage() {
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  placeholder="Enter form description (optional)"
+                  placeholder="Short description shown on the form (optional)"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   disabled={loading}
-                  rows={4}
+                  rows={3}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
-                <Input
-                  id="slug"
-                  placeholder="form-url-slug (optional)"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  disabled={loading}
-                />
-                <p className="text-xs text-slate-500">Leave empty to auto-generate from title</p>
+                <Label htmlFor="slug">URL slug</Label>
+                <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                  <span className="shrink-0">/f/</span>
+                  <input
+                    id="slug"
+                    value={slugTouched ? slug : effectiveSlug}
+                    onChange={(e) => {
+                      setSlug(e.target.value);
+                      setSlugTouched(true);
+                    }}
+                    onBlur={() => setSlug(slugify(slug))}
+                    placeholder="auto-generated"
+                    disabled={loading}
+                    className="h-9 min-w-0 flex-1 border-none bg-transparent py-0 pl-0 focus:outline-none"
+                  />
+                </div>
+                <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                  <SparklesIcon className="size-3" />
+                  Leave blank to auto-generate from the title.
+                </p>
               </div>
 
-              <div className="flex gap-4">
-                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-                  {loading ? "Creating..." : "Create Form"}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" size="lg" disabled={loading} className="flex-1">
+                  {loading && <Loader2Icon className="animate-spin" />}
+                  {loading ? "Creating…" : "Create form"}
                 </Button>
                 <Button
                   type="button"
+                  size="lg"
                   variant="outline"
                   onClick={() => router.push("/")}
                   disabled={loading}
@@ -120,6 +188,6 @@ export default function CreateFormPage() {
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
