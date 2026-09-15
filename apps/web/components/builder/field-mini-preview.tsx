@@ -1,5 +1,3 @@
-"use client";
-
 import type { BuilderField } from "~/lib/builder-types";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -45,7 +43,7 @@ export function FieldStaticPreview({ field }: { field: BuilderField }) {
   if (field.type === "rating") {
     return (
       <div className="flex items-center gap-1 text-sm text-muted-foreground">
-        {"★★★★★".slice(0, 5)}
+        {"â˜…â˜…â˜…â˜…â˜…".slice(0, 5)}
       </div>
     );
   }

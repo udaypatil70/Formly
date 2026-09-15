@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useMemo, useRef, useState } from "react";
 import {
   DndContext,
@@ -63,14 +61,14 @@ export function FormBuilder({
 
   const selectedField = fields.find((f) => f.id === selectedId) ?? null;
 
-  // ── Mutations ────────────────────────────────────────────
+  // â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const addMutation = trpc.field.add.useMutation();
   const updateMutation = trpc.field.update.useMutation();
   const deleteMutation = trpc.field.delete.useMutation();
   const reorderMutation = trpc.field.reorder.useMutation();
   const formUpdate = trpc.form.update.useMutation();
 
-  // ── Debounced autosave for field edits ───────────────────
+  // â”€â”€ Debounced autosave for field edits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pendingRef = useRef<Record<string, UpdateFieldInput>>({});
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -99,7 +97,7 @@ export function FormBuilder({
     setTimeout(() => setSaving(false), 700);
   };
 
-  // ── Field actions ────────────────────────────────────────
+  // â”€â”€ Field actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const addField = (type: BuilderField["type"]) => {
     const order = fields.length;
     const tempId = crypto.randomUUID();
@@ -222,7 +220,7 @@ export function FormBuilder({
       });
   };
 
-  // ── Public preview data (reuses the same renderer) ───────
+  // â”€â”€ Public preview data (reuses the same renderer) â”€â”€â”€â”€â”€â”€â”€
   const previewForm = useMemo(
     () => buildPublicForm(meta, fields, theme),
     [meta, fields, theme],
@@ -230,7 +228,7 @@ export function FormBuilder({
 
   const isDirty = Object.keys(pendingRef.current).length > 0;
 
-  // ── Drag & drop (palette + reorder) ──────────────────────
+  // â”€â”€ Drag & drop (palette + reorder) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [dragType, setDragType] = useState<BuilderField["type"] | null>(null);
 
@@ -281,7 +279,7 @@ export function FormBuilder({
           <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
             {saving || isDirty ? (
               <>
-                <SaveIcon className="size-3.5" /> Saving…
+                <SaveIcon className="size-3.5" /> Savingâ€¦
               </>
             ) : (
               "Saved"

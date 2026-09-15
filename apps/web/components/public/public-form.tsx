@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useMemo, useState } from "react";
 import { buildResponseSchema, type Field } from "@repo/validators";
 import { CheckCircle2Icon } from "lucide-react";

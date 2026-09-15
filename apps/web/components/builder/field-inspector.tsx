@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import type { FieldType } from "@repo/validators";

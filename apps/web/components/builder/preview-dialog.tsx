@@ -1,5 +1,3 @@
-"use client";
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { PublicForm } from "~/components/public/public-form";
 import type { PublicFormData } from "~/components/public/types";

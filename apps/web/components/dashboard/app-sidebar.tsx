@@ -1,5 +1,3 @@
-"use client";
-
 import { Link, useLocation } from "react-router-dom";
 import { ClipboardPenIcon, FolderIcon, PlusIcon } from "lucide-react";
 

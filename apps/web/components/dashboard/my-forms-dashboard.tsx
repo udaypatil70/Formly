@@ -1,5 +1,3 @@
-"use client";
-
 import { useDeferredValue, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import {
@@ -109,7 +107,7 @@ export function MyFormsDashboard() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search forms…"
+              placeholder="Search formsâ€¦"
               className="h-9 w-56"
             />
           </div>
@@ -374,7 +372,7 @@ function archivedIconStyles(archived: boolean): string {
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "â€”";
   return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
