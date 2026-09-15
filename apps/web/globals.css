@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/GeistVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMonoVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -119,5 +133,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: "Geist", system-ui, -apple-system, sans-serif;
+  }
+  code,
+  pre {
+    font-family: "Geist Mono", ui-monospace, monospace;
   }
 }

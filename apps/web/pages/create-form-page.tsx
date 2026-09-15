@@ -1,11 +1,8 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeftIcon, FilePlus2Icon, Loader2Icon, SparklesIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { api } from "~/trpc/server";
 import { trpc } from "~/trpc/client";
 import { Button } from "~/components/ui/button";
 import {
@@ -28,9 +25,8 @@ const slugify = (value: string) =>
     .replace(/-{2,}/g, "-")
     .slice(0, 255);
 
-export default function CreateFormPage() {
-  const router = useRouter();
-  const session = trpc.auth.getSession.useQuery();
+export function CreateFormPage() {
+  const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,13 +35,9 @@ export default function CreateFormPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!session.isLoading && session.data?.user === null) {
-      router.replace("/login");
-    }
-  }, [session.isLoading, session.data?.user, router]);
-
   const effectiveSlug = slugTouched && slug.trim() ? slugify(slug) : slugify(title);
+
+  const createForm = trpc.form.create.useMutation();
 
   const handleCreateForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,27 +52,19 @@ export default function CreateFormPage() {
     setError("");
 
     try {
-      const newForm = await api.form.create.mutate({
+      const newForm = await createForm.mutateAsync({
         title: trimmedTitle,
         description: description.trim() || undefined,
         slug: effectiveSlug || undefined,
         visibility: "public",
       });
       toast.success("Form created");
-      router.push(`/builder/${newForm.id}`);
+      navigate(`/builder/${newForm.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create form");
       setLoading(false);
     }
   };
-
-  if (session.isLoading) {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center px-4 py-12">
@@ -92,7 +76,7 @@ export default function CreateFormPage() {
         <div className="mb-6 flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => router.push("/")}
+            onClick={() => navigate("/")}
             className="text-muted-foreground -ml-2"
           >
             <ArrowLeftIcon />
@@ -178,7 +162,7 @@ export default function CreateFormPage() {
                   type="button"
                   size="lg"
                   variant="outline"
-                  onClick={() => router.push("/")}
+                  onClick={() => navigate("/")}
                   disabled={loading}
                 >
                   Cancel

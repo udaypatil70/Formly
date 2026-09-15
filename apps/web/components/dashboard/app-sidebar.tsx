@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { ClipboardPenIcon, FolderIcon, PlusIcon } from "lucide-react";
 
 import {
@@ -19,7 +18,7 @@ import {
 import { cn } from "~/lib/utils";
 
 export function AppSidebar() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -27,7 +26,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="group-data-[collapsible=icon]:justify-center">
-              <Link href="/">
+              <Link to="/">
                 <span className="bg-primary flex size-8 shrink-0 items-center justify-center rounded-md text-primary-foreground [&>svg]:size-4">
                   <ClipboardPenIcon />
                 </span>
@@ -54,7 +53,7 @@ export function AppSidebar() {
                   isActive={pathname === "/"}
                   tooltip="My Forms"
                 >
-                  <Link href="/">
+                  <Link to="/">
                     <FolderIcon />
                     <span>My Forms</span>
                   </Link>
@@ -62,7 +61,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="New Form">
-                  <Link href="/builder" className={cn("text-emerald-500 dark:text-emerald-400")}>
+                  <Link to="/builder" className={cn("text-emerald-500 dark:text-emerald-400")}>
                     <PlusIcon />
                     <span>New Form</span>
                   </Link>

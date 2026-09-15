@@ -1,8 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { ClipboardPenIcon, Loader2Icon, LogInIcon, UserPlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,8 +18,8 @@ import { Label } from "~/components/ui/label";
 
 type Mode = "sign-in" | "sign-up";
 
-export default function LoginPage() {
-  const router = useRouter();
+export function LoginPage() {
+  const navigate = useNavigate();
   const session = trpc.auth.getSession.useQuery();
 
   const [mode, setMode] = useState<Mode>("sign-in");
@@ -34,9 +31,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (session.data?.user) {
-      router.replace("/");
+      navigate("/", { replace: true });
     }
-  }, [session.data?.user, router]);
+  }, [session.data?.user, navigate]);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -86,8 +83,7 @@ export default function LoginPage() {
 
       toast.success(mode === "sign-in" ? "Welcome back!" : "Account created");
       session.refetch();
-      router.replace("/");
-      router.refresh();
+      navigate("/", { replace: true });
     } catch {
       setError("Couldn't reach the API server. Is it running?");
       setLoading(false);
@@ -200,7 +196,7 @@ export default function LoginPage() {
       </Card>
 
       <p className="text-muted-foreground mt-6 text-xs">
-        <Link href="/" className="hover:text-foreground">
+        <Link to="/" className="hover:text-foreground">
           Back to dashboard
         </Link>
       </p>

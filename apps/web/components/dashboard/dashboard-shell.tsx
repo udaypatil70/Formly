@@ -1,7 +1,4 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Navigate, Outlet } from "react-router-dom";
 import { Loader2Icon } from "lucide-react";
 
 import { trpc } from "~/trpc/client";
@@ -10,17 +7,8 @@ import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 import { AppSidebar } from "~/components/dashboard/app-sidebar";
 import { DashboardHeader } from "~/components/dashboard/dashboard-header";
 
-export default function DashboardLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  const router = useRouter();
+export function DashboardShell() {
   const session = trpc.auth.getSession.useQuery();
-
-  useEffect(() => {
-    if (!session.isLoading && session.data?.user === null) {
-      router.replace("/login");
-    }
-  }, [session.isLoading, session.data?.user, router]);
 
   if (session.isLoading) {
     return (
@@ -46,7 +34,7 @@ export default function DashboardLayout({
   const user = session.data.user;
 
   if (!user) {
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -56,7 +44,7 @@ export default function DashboardLayout({
         <DashboardHeader user={user} />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 lg:px-10">
-            {children}
+            <Outlet />
           </div>
         </main>
       </SidebarInset>

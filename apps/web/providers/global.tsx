@@ -1,7 +1,4 @@
-"use client";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider as NextThemesProvider } from "next-themes";
 import React, { useState } from "react";
 import { Toaster } from "~/components/ui/sonner";
 
@@ -12,7 +9,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnMount: true,
-      staleTime: Infinity,
+      staleTime: 0,
     },
   },
 });
@@ -25,17 +22,10 @@ export const GlobalProviders: React.FC<{ children: React.ReactNode }> = ({ child
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <NextThemesProvider
-        attribute="class"
-        defaultTheme="dark"
-        enableSystem
-        disableTransitionOnChange
-      >
-        <trpc.Provider queryClient={queryClient} client={trpcClient}>
-          {children}
-          <Toaster />
-        </trpc.Provider>
-      </NextThemesProvider>
+      <trpc.Provider queryClient={queryClient} client={trpcClient}>
+        {children}
+        <Toaster />
+      </trpc.Provider>
     </QueryClientProvider>
   );
 };

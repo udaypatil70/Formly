@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import {
   ChevronsUpDownIcon,
   LogOutIcon,
@@ -41,7 +41,7 @@ function initials(name: string): string {
 }
 
 export function DashboardHeader({ user }: DashboardHeaderProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const signOut = trpc.auth.signOut.useMutation();
 
   const handleSignOut = async () => {
@@ -50,8 +50,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
     } catch {
       // continue to redirect even if the request fails
     }
-    router.replace("/login");
-    router.refresh();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -68,7 +67,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            onClick={() => router.push("/builder")}
+            onClick={() => navigate("/builder")}
           >
             <PlusIcon />
             <span className="hidden sm:inline">New Form</span>

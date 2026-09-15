@@ -15,7 +15,7 @@ import {
   SquareIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
@@ -36,7 +36,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { StatusBadge, VisibilityBadge } from "./form-status-badge";
 
 export function MyFormsDashboard() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
 
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -113,7 +113,7 @@ export function MyFormsDashboard() {
               className="h-9 w-56"
             />
           </div>
-          <Button onClick={() => router.push("/builder")}>
+          <Button onClick={() => navigate("/builder")}>
             <FilePlus2Icon />
             New form
           </Button>
@@ -163,7 +163,7 @@ export function MyFormsDashboard() {
           </EmptyHeader>
           {!deferredSearch && !includeArchived && (
             <EmptyContent>
-              <Button onClick={() => router.push("/builder")}>
+              <Button onClick={() => navigate("/builder")}>
                 <FilePlus2Icon />
                 Create your first form
               </Button>
@@ -191,7 +191,7 @@ export function MyFormsDashboard() {
                   <TableCell className="max-w-0 min-w-0">
                     <button
                       className="flex w-full cursor-pointer items-start gap-2 text-left"
-                      onClick={() => router.push(`/builder/${form.id}`)}
+                      onClick={() => navigate(`/builder/${form.id}`)}
                     >
                       <div className={archivedIconStyles(form.archived)}>
                         <ArrowLeftRightIcon className="size-3.5" />
@@ -235,7 +235,7 @@ export function MyFormsDashboard() {
                         align="end"
                         className="w-52"
                       >
-                        <DropdownMenuItem onClick={() => router.push(`/builder/${form.id}`)}>
+                        <DropdownMenuItem onClick={() => navigate(`/builder/${form.id}`)}>
                           <PencilIcon />
                           Edit
                         </DropdownMenuItem>
@@ -267,7 +267,7 @@ export function MyFormsDashboard() {
                           </DropdownMenuItem>
                         )}
                         {form.status === "published" && (
-                          <DropdownMenuItem onClick={() => router.push(`/f/${form.slug}`)}>
+                          <DropdownMenuItem onClick={() => navigate(`/f/${form.slug}`)}>
                             <EyeIcon />
                             View live
                           </DropdownMenuItem>
