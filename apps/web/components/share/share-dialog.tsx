@@ -36,13 +36,16 @@ export function ShareDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [embedType, setEmbedType] = useState<"iframe" | "script">("iframe");
   const qrRef = useRef<HTMLCanvasElement>(null);
 
   if (!form) return null;
 
-  const url = `${window.location.origin}/f/${form.slug}`;
+  const url = `${window.location.origin}/form/${form.slug}`;
   const shareText = `Check out "${form.title}" on FormForge`;
-  const embedCode = `<iframe src="${url}" width="100%" height="640" style="border:0;border-radius:12px" loading="lazy" allowfullscreen></iframe>`;
+  const iframeCode = `<iframe src="${url}" width="100%" height="640" style="border:0;border-radius:12px" loading="lazy" allowfullscreen></iframe>`;
+  const scriptCode = `<script src="${window.location.origin}/embed.js" data-form="${form.slug}" async></script>`;
+  const embedCode = embedType === "iframe" ? iframeCode : scriptCode;
 
   const copy = (key: string, text: string, label: string) => async () => {
     try {
@@ -175,6 +178,27 @@ export function ShareDialog({
 
           <TabsContent value="embed" className="pt-4">
             <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">Type</span>
+                <div className="bg-muted flex items-center rounded-md border p-0.5">
+                  {(["iframe", "script"] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setEmbedType(type)}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                        embedType === type
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="border-input bg-muted relative rounded-md border p-3">
                 <code className="font-mono text-muted-foreground block text-xs break-all whitespace-pre-wrap">
                   {embedCode}
@@ -198,6 +222,11 @@ export function ShareDialog({
                   </>
                 )}
               </Button>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {embedType === "iframe"
+                  ? "Paste the iframe anywhere in your site to show the form directly."
+                  : "Paste the script tag exactly where you want the form to appear. It builds a responsive frame automatically."}
+              </p>
             </div>
           </TabsContent>
         </Tabs>

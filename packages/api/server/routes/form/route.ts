@@ -16,6 +16,7 @@ import {
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
 import { getFormBy, getTheme, getValidatorFields } from "../../utils/form";
 import { slugify, ensureUniqueSlug, isSlugAvailable } from "../../utils/slug";
+import { hashPassword } from "../../utils/password";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import {
   formDetailOutput,
@@ -119,7 +120,14 @@ export const formRouter = router({
               slug: finalSlug,
               visibility: input.visibility ?? "public",
               themeId: input.themeId ?? null,
-              settings: input.settings ?? {},
+              settings: input.settings
+                ? {
+                    ...input.settings,
+                    password: input.settings.password
+                      ? hashPassword(input.settings.password)
+                      : undefined,
+                  }
+                : {},
             })
             .returning()
             .execute();
@@ -258,6 +266,12 @@ export const formRouter = router({
         }
       }
 
+      const baseSettings = input.settings ?? form.settings;
+      const nextSettings = { ...(baseSettings ?? {}) };
+      if (nextSettings.password) {
+        nextSettings.password = hashPassword(nextSettings.password as string);
+      }
+
       const updated = await db
         .update(formsTable)
         .set({
@@ -267,7 +281,7 @@ export const formRouter = router({
           slug: input.slug ?? form.slug,
           visibility: input.visibility ?? form.visibility,
           themeId: input.themeId !== undefined ? input.themeId : form.themeId,
-          settings: input.settings ?? form.settings,
+          settings: nextSettings,
         })
         .where(eq(formsTable.id, input.id))
         .returning()
@@ -317,6 +331,7 @@ export const formRouter = router({
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
       const source = await assertFormOwner(input.id, ctx.user.id);
+      const { password: _password, ...cloneSettings } = source.settings ?? {};
 
       return db.transaction(async (tx) => {
         const newSlug = await ensureUniqueSlug(`${source.slug}-copy`);
@@ -331,7 +346,7 @@ export const formRouter = router({
             visibility: source.visibility,
             archived: false,
             themeId: source.themeId,
-            settings: source.settings ?? {},
+            settings: cloneSettings,
           })
           .returning()
           .execute();

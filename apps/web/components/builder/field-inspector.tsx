@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import type { FieldType } from "@repo/validators";
 
@@ -32,6 +32,15 @@ interface FieldInspectorProps {
   onUpdate: (id: string, patch: Partial<BuilderField>) => void;
   onDelete: (id: string) => void;
 }
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 255);
 
 const FIELD_TYPES: FieldType[] = [
   "short_text",
@@ -523,6 +532,23 @@ function FormSettings({
   onThemeChange: (t: BuilderTheme | null) => void;
 }) {
   const settings = meta.settings ?? {};
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [slugDraft, setSlugDraft] = useState(meta.slug);
+  const hasPassword = Boolean(settings.password);
+
+  useEffect(() => {
+    setSlugDraft(meta.slug);
+  }, [meta.slug]);
+
+  const commitSlug = () => {
+    const cleaned = slugify(slugDraft);
+    if (!cleaned) {
+      setSlugDraft(meta.slug);
+      return;
+    }
+    if (cleaned === meta.slug) return;
+    onUpdateMeta({ slug: cleaned });
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -533,6 +559,25 @@ function FormSettings({
           value={meta.title}
           onChange={(e) => onUpdateMeta({ title: e.target.value })}
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-slug">Custom URL</Label>
+        <div className="bg-muted/40 flex items-center gap-1 rounded-md border px-3 text-sm text-muted-foreground">
+          <span className="shrink-0">/form/</span>
+          <input
+            id="form-slug"
+            className="text-foreground min-w-0 flex-1 bg-transparent outline-none"
+            value={slugDraft}
+            onChange={(e) => setSlugDraft(e.target.value)}
+            onBlur={commitSlug}
+            placeholder="my-form"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Lowercase letters, numbers and hyphens. Changing it breaks any old
+          shared links.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -582,6 +627,54 @@ function FormSettings({
             })
           }
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-password">Password protection</Label>
+        {hasPassword ? (
+          <p className="text-muted-foreground text-xs">
+            A password is currently set. Visitors must enter it before opening
+            the form.
+          </p>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <Input
+            id="form-password"
+            type="password"
+            placeholder={
+              hasPassword
+                ? "Leave blank to keep current password"
+                : "No password set"
+            }
+            value={passwordDraft}
+            onChange={(e) => setPasswordDraft(e.target.value)}
+          />
+          {hasPassword ? (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => {
+                onSettingsChange({ password: undefined });
+                setPasswordDraft("");
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+        {passwordDraft ? (
+          <Button
+            size="sm"
+            type="button"
+            onClick={() => {
+              onSettingsChange({ password: passwordDraft });
+              setPasswordDraft("");
+            }}
+          >
+            {hasPassword ? "Update password" : "Set password"}
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">

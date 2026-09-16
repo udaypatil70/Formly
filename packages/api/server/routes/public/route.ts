@@ -22,6 +22,8 @@ import { fieldOutput, themeOutput } from "../../utils/schemas";
 import { rateLimit } from "../../utils/rate-limit";
 import { verifyTurnstileToken } from "../../utils/turnstile";
 import { parseUserAgent } from "../../utils/ua";
+import { verifyPassword } from "../../utils/password";
+import type { SelectForm } from "@repo/db/schema";
 
 const TAGS = ["Public"];
 
@@ -43,6 +45,9 @@ const publicFormViewOutput = z.object({
     })
     .optional(),
   requiresPassword: z.boolean(),
+  locked: z.boolean(),
+  incorrectPassword: z.boolean(),
+  blocked: z.enum(["expired", "limit_reached"]).nullish(),
   fields: z.array(fieldOutput),
   theme: themeOutput.nullable(),
 });
@@ -61,47 +66,51 @@ const submitInput = z.object({
   turnstileToken: z.string().optional(),
 });
 
-/** Load a form and enforce the server-side access rules. */
-async function resolveAccessibleForm(
-  slug: string,
-  password?: string,
-) {
-  const form = await getFormBy(
+/** Load a published, non-archived form by slug. */
+async function loadPublishedForm(slug: string): Promise<SelectForm> {
+  return getFormBy(
     and(
       eq(formsTable.slug, slug),
       eq(formsTable.status, "published"),
       eq(formsTable.archived, false),
     )!,
   );
+}
 
+/** Returns "expired" / "limit_reached" when the form should stop accepting views. */
+async function blockedState(
+  form: SelectForm,
+): Promise<"expired" | "limit_reached" | null> {
   const settings = form.settings ?? {};
 
   if (settings.expiry) {
     const expiry = new Date(settings.expiry);
     if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "This form has expired",
-      });
+      return "expired";
     }
   }
 
-  if (settings.password) {
-    if (password == null || password === "") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "This form is password protected",
-      });
-    }
-    if (settings.password !== password) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Incorrect password",
-      });
+  if (settings.responseLimit) {
+    const [countRow] = await db
+      .select({ count: count() })
+      .from(responsesTable)
+      .where(eq(responsesTable.formId, form.id))
+      .execute();
+    if (Number(countRow?.count ?? 0) >= settings.responseLimit) {
+      return "limit_reached";
     }
   }
 
-  return form;
+  return null;
+}
+
+/** Checks the (optional) form password against a plaintext attempt. */
+function passwordState(form: SelectForm, password?: string) {
+  const stored = form.settings?.password;
+  if (!stored) return { locked: false };
+  if (password == null || password === "") return { locked: true };
+  if (!verifyPassword(password, stored)) return { locked: true, incorrect: true };
+  return { locked: false };
 }
 
 export const publicRouter = router({
@@ -125,11 +134,48 @@ export const publicRouter = router({
         });
       }
 
-      const form = await resolveAccessibleForm(input.slug, input.password);
-      const fields = await getFieldsForForm(form.id);
+      const form = await loadPublishedForm(input.slug);
+      const settings = form.settings ?? {};
+      const { password: _password, ...safeSettings } = settings;
       const theme = await getTheme(form.themeId);
 
-      const { password: _password, ...safeSettings } = form.settings ?? {};
+      const blocked = await blockedState(form);
+      if (blocked) {
+        return {
+          id: form.id,
+          title: form.title,
+          description: form.description,
+          slug: form.slug,
+          visibility: form.visibility,
+          settings: safeSettings,
+          requiresPassword: false,
+          locked: false,
+          incorrectPassword: false,
+          blocked,
+          fields: [],
+          theme: null,
+        };
+      }
+
+      const auth = passwordState(form, input.password);
+      if (auth.locked) {
+        return {
+          id: form.id,
+          title: form.title,
+          description: form.description,
+          slug: form.slug,
+          visibility: form.visibility,
+          settings: safeSettings,
+          requiresPassword: true,
+          locked: true,
+          incorrectPassword: !!auth.incorrect,
+          blocked: null,
+          fields: [],
+          theme: serializeTheme(theme),
+        };
+      }
+
+      const fields = await getFieldsForForm(form.id);
 
       const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
       await db
@@ -144,7 +190,10 @@ export const publicRouter = router({
         slug: form.slug,
         visibility: form.visibility,
         settings: safeSettings,
-        requiresPassword: !!_password,
+        requiresPassword: false,
+        locked: false,
+        incorrectPassword: false,
+        blocked: null,
         fields: fields.fields.map((field) =>
           toValidatorField(field, fields.optionsByField.get(field.id)),
         ),
@@ -165,7 +214,34 @@ export const publicRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const form = await resolveAccessibleForm(input.slug, input.password);
+      const form = await loadPublishedForm(input.slug);
+      const settings = form.settings ?? {};
+      const { password } = input;
+
+      if (settings.expiry) {
+        const expiry = new Date(settings.expiry);
+        if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form has expired",
+          });
+        }
+      }
+
+      if (settings.password) {
+        if (password == null || password === "") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form is password protected",
+          });
+        }
+        if (!verifyPassword(password, settings.password)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Incorrect password",
+          });
+        }
+      }
 
       // Honeypot: silently accept spam so bots think the submit succeeded.
       if (typeof input.honeypot === "string" && input.honeypot.length > 0) {
@@ -183,8 +259,6 @@ export const publicRouter = router({
           message: "Bot verification failed. Please retry.",
         });
       }
-
-      const settings = form.settings ?? {};
 
       if (settings.responseLimit) {
         const [countRow] = await db

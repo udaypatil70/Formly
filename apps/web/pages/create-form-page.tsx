@@ -133,7 +133,7 @@ export function CreateFormPage() {
               <div className="space-y-2">
                 <Label htmlFor="slug">URL slug</Label>
                 <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                  <span className="shrink-0">/f/</span>
+                  <span className="shrink-0">/form/</span>
                   <input
                     id="slug"
                     value={slugTouched ? slug : effectiveSlug}

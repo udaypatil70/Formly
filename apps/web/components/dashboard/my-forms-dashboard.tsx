@@ -199,7 +199,7 @@ export function MyFormsDashboard() {
                       <div className="min-w-0">
                         <div className="truncate font-medium">{form.title}</div>
                         <div className="text-muted-foreground truncate text-xs">
-                          /f/{form.slug}
+                          /form/{form.slug}
                         </div>
                       </div>
                     </button>
@@ -275,7 +275,7 @@ export function MyFormsDashboard() {
                           </DropdownMenuItem>
                         )}
                         {form.status === "published" && (
-                          <DropdownMenuItem onClick={() => navigate(`/f/${form.slug}`)}>
+                          <DropdownMenuItem onClick={() => navigate(`/form/${form.slug}`)}>
                             <EyeIcon />
                             View live
                           </DropdownMenuItem>

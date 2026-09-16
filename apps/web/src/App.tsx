@@ -35,6 +35,7 @@ export function App() {
         }
       />
       <Route path="/f/:slug" element={<PublicFormPage />} />
+      <Route path="/form/:slug" element={<PublicFormPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
