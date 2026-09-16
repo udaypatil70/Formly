@@ -50,6 +50,13 @@
       "when": 1789452644084,
       "tag": "0006_panoramic_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789546027515,
+      "tag": "0007_adorable_edwin_jarvis",
+      "breakpoints": true
     }
   ]
 }

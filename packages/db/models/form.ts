@@ -190,6 +190,8 @@ export const responsesTable = pgTable(
     submittedAt: timestamp("submitted_at").defaultNow().notNull(),
     ipHash: varchar("ip_hash", { length: 64 }),
     completedInSeconds: integer("completed_in_seconds"),
+    device: varchar("device", { length: 20 }),
+    browser: varchar("browser", { length: 20 }),
   },
   (table) => [
     index("responses_form_id_idx").on(table.formId),
@@ -232,6 +234,8 @@ export const formViewsTable = pgTable(
       .notNull()
       .references(() => formsTable.id, { onDelete: "cascade" }),
     viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+    device: varchar("device", { length: 20 }),
+    browser: varchar("browser", { length: 20 }),
   },
   (table) => [
     index("form_views_form_id_idx").on(table.formId),

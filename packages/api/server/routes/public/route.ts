@@ -21,6 +21,7 @@ import { serializeForm, serializeTheme } from "../../utils/serialize";
 import { fieldOutput, themeOutput } from "../../utils/schemas";
 import { rateLimit } from "../../utils/rate-limit";
 import { verifyTurnstileToken } from "../../utils/turnstile";
+import { parseUserAgent } from "../../utils/ua";
 
 const TAGS = ["Public"];
 
@@ -130,7 +131,11 @@ export const publicRouter = router({
 
       const { password: _password, ...safeSettings } = form.settings ?? {};
 
-      await db.insert(formViewsTable).values({ formId: form.id }).execute();
+      const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
+      await db
+        .insert(formViewsTable)
+        .values({ formId: form.id, device, browser })
+        .execute();
 
       return {
         id: form.id,
@@ -225,12 +230,15 @@ export const publicRouter = router({
       }
 
       const responseId = await db.transaction(async (tx) => {
+        const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
         const inserted = await tx
           .insert(responsesTable)
           .values({
             formId: form.id,
             ipHash: hashIp(ipKey),
             completedInSeconds: input.completedInSeconds ?? null,
+            device,
+            browser,
           })
           .returning()
           .execute();
