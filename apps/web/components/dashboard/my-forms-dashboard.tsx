@@ -3,6 +3,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import {
   ArchiveIcon,
   ArrowLeftRightIcon,
+  TrendingUpIcon,
   ClipboardCopyIcon,
   EyeIcon,
   FilePlus2Icon,
@@ -241,6 +242,10 @@ export function MyFormsDashboard() {
                         <DropdownMenuItem onClick={() => navigate(`/responses/${form.id}`)}>
                           <InboxIcon />
                           View responses
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/analytics/${form.id}`)}>
+                          <TrendingUpIcon />
+                          Analytics
                         </DropdownMenuItem>
                         {form.status === "published" ? (
                           <DropdownMenuItem

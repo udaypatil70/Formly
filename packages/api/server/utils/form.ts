@@ -1,4 +1,4 @@
-import { db, eq, sql, type SQL } from "@repo/db";
+import { db, eq, inArray, sql, type SQL } from "@repo/db";
 import {
   fieldOptionsTable,
   fieldsTable,
@@ -60,9 +60,7 @@ export async function getFieldsForForm(formId: string) {
   const options = await db
     .select()
     .from(fieldOptionsTable)
-    .where(
-      sql`${fieldOptionsTable.fieldId} IN (${fields.map((f) => f.id).join(", ")})`,
-    )
+    .where(inArray(fieldOptionsTable.fieldId, fields.map((f) => f.id)))
     .orderBy(fieldOptionsTable.order);
 
   const optionsByField = new Map<string, SelectFieldOption[]>();

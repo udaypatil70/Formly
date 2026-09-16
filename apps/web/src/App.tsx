@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { DashboardShell } from "~/components/dashboard/dashboard-shell";
 import { RequireAuth } from "~/components/dashboard/require-auth";
 import { MyFormsDashboard } from "~/components/dashboard/my-forms-dashboard";
+import { AnalyticsPage } from "~/pages/analytics-page";
 import { CreateFormPage } from "~/pages/create-form-page";
 import { FormBuilderPage } from "~/pages/form-builder-page";
 import { PublicFormPage } from "~/pages/public-form-page";
@@ -15,6 +16,7 @@ export function App() {
       <Route element={<DashboardShell />}>
         <Route index element={<MyFormsDashboard />} />
         <Route path="/responses/:formId" element={<ResponsesPage />} />
+        <Route path="/analytics/:formId" element={<AnalyticsPage />} />
       </Route>
       <Route
         path="/builder"
