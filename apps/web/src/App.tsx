@@ -6,6 +6,7 @@ import { MyFormsDashboard } from "~/components/dashboard/my-forms-dashboard";
 import { CreateFormPage } from "~/pages/create-form-page";
 import { FormBuilderPage } from "~/pages/form-builder-page";
 import { PublicFormPage } from "~/pages/public-form-page";
+import { ResponsesPage } from "~/pages/responses-page";
 import { LoginPage } from "~/pages/login-page";
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
     <Routes>
       <Route element={<DashboardShell />}>
         <Route index element={<MyFormsDashboard />} />
+        <Route path="/responses/:formId" element={<ResponsesPage />} />
       </Route>
       <Route
         path="/builder"

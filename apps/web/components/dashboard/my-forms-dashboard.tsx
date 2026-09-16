@@ -6,6 +6,7 @@ import {
   ClipboardCopyIcon,
   EyeIcon,
   FilePlus2Icon,
+  InboxIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlayIcon,
@@ -236,6 +237,10 @@ export function MyFormsDashboard() {
                         <DropdownMenuItem onClick={() => navigate(`/builder/${form.id}`)}>
                           <PencilIcon />
                           Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/responses/${form.id}`)}>
+                          <InboxIcon />
+                          View responses
                         </DropdownMenuItem>
                         {form.status === "published" ? (
                           <DropdownMenuItem
