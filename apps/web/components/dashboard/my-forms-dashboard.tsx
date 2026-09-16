@@ -4,7 +4,6 @@ import {
   ArchiveIcon,
   ArrowLeftRightIcon,
   TrendingUpIcon,
-  ClipboardCopyIcon,
   EyeIcon,
   FilePlus2Icon,
   InboxIcon,
@@ -12,6 +11,7 @@ import {
   PencilIcon,
   PlayIcon,
   RotateCcwIcon,
+  Share2Icon,
   SquareIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
+import { ShareDialog } from "~/components/share/share-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import {
@@ -45,6 +46,11 @@ export function MyFormsDashboard() {
   const [deleteForm, setDeleteForm] = useState<
     { id: string; title: string } | null
   >(null);
+  const [shareForm, setShareForm] = useState<{
+    id: string;
+    title: string;
+    slug: string;
+  } | null>(null);
 
   const formsQuery = trpc.form.getAllMine.useQuery(
     { page: 1, pageSize: 100, includeArchived },
@@ -73,12 +79,6 @@ export function MyFormsDashboard() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Something went wrong");
     }
-  };
-
-  const copyLink = (slug: string) => {
-    const url = `${window.location.origin}/f/${slug}`;
-    void navigator.clipboard.writeText(url);
-    toast.success("Link copied to clipboard");
   };
 
   const isBusy = publishMutation.isPending || unpublishMutation.isPending;
@@ -280,9 +280,9 @@ export function MyFormsDashboard() {
                             View live
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => copyLink(form.slug)}>
-                          <ClipboardCopyIcon />
-                          Copy link
+                        <DropdownMenuItem onClick={() => setShareForm(form)}>
+                          <Share2Icon />
+                          Share
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
@@ -370,6 +370,13 @@ export function MyFormsDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    <ShareDialog
+        open={shareForm !== null}
+        onOpenChange={(open) => {
+          if (!open) setShareForm(null);
+        }}
+        form={shareForm}
+      />
     </div>
   );
 }
