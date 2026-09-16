@@ -75,6 +75,7 @@ export const formsTable = pgTable(
         expiry?: string;
         responseLimit?: number;
         thankYouMessage?: string;
+        stepMode?: "page" | "question";
       }>()
       .default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),

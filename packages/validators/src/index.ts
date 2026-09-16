@@ -102,6 +102,7 @@ export const FormSchema = z.object({
       password: z.string().optional(),
       expiry: z.string().optional(),
       responseLimit: z.number().int().positive().optional(),
+      stepMode: z.enum(["page", "question"]).optional(),
     })
     .optional(),
   createdAt: z.string().datetime(),
@@ -157,6 +158,7 @@ export const CreateFormInput = z.object({
       expiry: z.string().optional(),
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().max(2000).optional(),
+      stepMode: z.enum(["page", "question"]).optional(),
     })
     .optional(),
   fields: z.array(CreateFieldInput).optional(),
@@ -301,5 +303,7 @@ export const SubmitResponseInput = z.object({
   formId: z.string().uuid(),
   completedInSeconds: z.number().int().positive().optional(),
   answers: z.record(z.string().uuid(), AnswerValueSchema),
+  honeypot: z.string().optional(),
+  turnstileToken: z.string().optional(),
 });
 export type SubmitResponseInput = z.infer<typeof SubmitResponseInput>;

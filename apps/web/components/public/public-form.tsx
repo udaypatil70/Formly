@@ -17,13 +17,21 @@ import {
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
+import { TurnstileWidget } from "./turnstile-widget";
 import type { PublicField, PublicFormData } from "./types";
+
+export interface SubmissionMeta {
+  honeypot?: string;
+  turnstileToken?: string;
+}
 
 interface PublicFormProps {
   form: PublicFormData;
-  onSubmit: (values: Record<string, unknown>) => Promise<void>;
+  onSubmit: (values: Record<string, unknown>, meta?: SubmissionMeta) => Promise<void>;
   onReset?: () => void;
 }
+
+const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
 
 function fieldIsVisible(field: PublicField, values: Record<string, unknown>): boolean {
   const rule = field.conditionalLogic?.showIf;
@@ -52,10 +60,12 @@ function FieldInput({
   field,
   value,
   onChange,
+  autoFocus,
 }: {
   field: PublicField;
   value: unknown;
   onChange: (value: unknown) => void;
+  autoFocus?: boolean;
 }) {
   switch (field.type) {
     case "short_text":
@@ -65,6 +75,7 @@ function FieldInput({
       return (
         <Input
           name={field.id}
+          autoFocus={autoFocus}
           type={
             field.type === "email"
               ? "email"
@@ -91,6 +102,7 @@ function FieldInput({
       return (
         <Textarea
           name={field.id}
+          autoFocus={autoFocus}
           placeholder={field.placeholder ?? undefined}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
@@ -225,6 +237,25 @@ function FieldInput({
   }
 }
 
+function toValidatorFields(fields: PublicField[]): Field[] {
+  return fields.map((f, index) => ({
+    id: f.id,
+    formId: "preview",
+    type: f.type,
+    label: f.label,
+    required: f.required,
+    order: index,
+    validationRules: f.validationRules,
+    conditionalLogic: f.conditionalLogic,
+    options: f.options?.map((o, oi) => ({
+      id: `${f.id}-${oi}`,
+      label: o.label,
+      value: o.value,
+      order: oi,
+    })),
+  }));
+}
+
 export function PublicForm({
   form,
   onSubmit,
@@ -234,67 +265,41 @@ export function PublicForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
 
-  const schema = useMemo(() => {
-    const fields: Field[] = form.fields.map((f, index) => ({
-      id: f.id,
-      formId: "preview",
-      type: f.type,
-      label: f.label,
-      required: f.required,
-      order: index,
-      validationRules: f.validationRules,
-      conditionalLogic: f.conditionalLogic,
-      options: f.options?.map((o, oi) => ({
-        id: `${f.id}-${oi}`,
-        label: o.label,
-        value: o.value,
-        order: oi,
-      })),
-    }));
-    return buildResponseSchema(fields);
-  }, [form.fields]);
+  const stepMode = form.settings?.stepMode ?? "question";
 
-  // Split the form into pages at type === "page_break" dividers.
-  const pages = useMemo<PublicField[][]>(() => {
-    const result: PublicField[][] = [[]];
+  const schema = useMemo(() => buildResponseSchema(toValidatorFields(form.fields)), [form.fields]);
+
+  // Steps: one field per screen (question mode) or one page per screen (page mode).
+  const steps = useMemo<PublicField[][]>(() => {
+    if (stepMode === "question") {
+      return form.fields
+        .filter((f) => f.type !== "page_break" && fieldIsVisible(f, values))
+        .map((f) => [f]);
+    }
+    const pages: PublicField[][] = [[]];
     for (const f of form.fields) {
       if (f.type === "page_break") {
-        result.push([]);
+        pages.push([]);
         continue;
       }
-      result[result.length - 1]!.push(f);
+      pages[pages.length - 1]!.push(f);
     }
-    return result.filter((page) => page.length > 0);
-  }, [form.fields]);
+    return pages
+      .map((page) => page.filter((f) => fieldIsVisible(f, values)))
+      .filter((page) => page.length > 0);
+  }, [stepMode, form.fields, values]);
 
-  const totalPages = pages.length;
-  const isMultipage = totalPages > 1;
-  const safePage = Math.min(currentPage, Math.max(totalPages - 1, 0));
-  const pageFields = (totalPages > 0 ? pages[safePage]! : []).filter((f) =>
-    fieldIsVisible(f, values),
-  );
+  const totalSteps = steps.length;
+  const safeStep = Math.min(currentStep, Math.max(totalSteps - 1, 0));
+  const currentFields = totalSteps > 0 ? steps[safeStep]! : [];
+  const isLastStep = totalSteps === 0 || safeStep >= totalSteps - 1;
 
-  const buildPageSchema = (fields: PublicField[]) => {
-    const mapped: Field[] = fields.map((f, index) => ({
-      id: f.id,
-      formId: "preview",
-      type: f.type,
-      label: f.label,
-      required: f.required,
-      order: index,
-      validationRules: f.validationRules,
-      conditionalLogic: f.conditionalLogic,
-      options: f.options?.map((o, oi) => ({
-        id: `${f.id}-${oi}`,
-        label: o.label,
-        value: o.value,
-        order: oi,
-      })),
-    }));
-    return buildResponseSchema(mapped);
-  };
+  const buildStepSchema = (fields: PublicField[]) =>
+    buildResponseSchema(toValidatorFields(fields));
 
   if (submitted) {
     return (
@@ -315,13 +320,13 @@ export function PublicForm({
     );
   }
 
-  const goToPage = (page: number) => {
-    setCurrentPage(page);
+  const goToStep = (step: number) => {
+    setCurrentStep(step);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const validatePage = (fields: PublicField[]): boolean => {
-    const result = buildPageSchema(fields).safeParse(values);
+  const validateStep = (fields: PublicField[]): boolean => {
+    const result = buildStepSchema(fields).safeParse(values);
     if (!result.success) {
       const nextErrors: Record<string, string> = {};
       for (const issue of result.error.issues) {
@@ -335,19 +340,24 @@ export function PublicForm({
     return true;
   };
 
-  const handleNext = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!validatePage(pageFields)) return;
-    goToPage(safePage + 1);
+  const handleNext = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.preventDefault();
+    if (!validateStep(currentFields)) return;
+    goToStep(safeStep + 1);
   };
 
-  const handleBack = (e: React.MouseEvent) => {
-    e.preventDefault();
-    goToPage(safePage - 1);
+  const handleBack = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.preventDefault();
+    goToStep(safeStep - 1);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.MouseEvent | React.KeyboardEvent | React.FormEvent) => {
+    e?.preventDefault();
+    if (!validateStep(currentFields)) return;
+    if (TURNSTILE_SITE_KEY && isLastStep && !turnstileToken) {
+      setErrors((prev) => ({ ...prev, _turnstile: "Please complete the verification" }));
+      return;
+    }
     const result = schema.safeParse(values);
     if (!result.success) {
       const nextErrors: Record<string, string> = {};
@@ -361,10 +371,27 @@ export function PublicForm({
     setErrors({});
     setSubmitting(true);
     try {
-      await onSubmit(result.data);
+      await onSubmit(result.data, {
+        honeypot: honeypot || "",
+        turnstileToken: turnstileToken || undefined,
+      });
       setSubmitted(true);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Enter advances to the next question without submitting the whole form.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === "TEXTAREA") return;
+    if (target.tagName === "BUTTON") return;
+    if (isLastStep) {
+      handleSubmit(e);
+    } else {
+      handleNext(e);
     }
   };
 
@@ -381,6 +408,9 @@ export function PublicForm({
   const primary = form.theme?.colors.primary ?? "#6d28d9";
   const surface = form.theme?.colors.surface ?? "#18181b";
   const text = form.theme?.colors.text ?? "#fafafa";
+
+  const progress =
+    totalSteps === 0 ? 100 : ((safeStep + 1) / totalSteps) * 100;
 
   return (
     <div
@@ -404,13 +434,13 @@ export function PublicForm({
             <p className="mt-2 text-xs opacity-60">Password protected form</p>
           ) : null}
 
-          {isMultipage && (
+          {totalSteps > 0 && (
             <div className="mt-6">
               <div className="mb-1.5 flex items-center justify-between text-xs opacity-70">
                 <span>
-                  Page {safePage + 1} of {totalPages}
+                  Step {safeStep + 1} of {totalSteps}
                 </span>
-                <span>{Math.round(((safePage + 1) / totalPages) * 100)}%</span>
+                <span>{Math.round(progress)}%</span>
               </div>
               <div
                 className="h-1.5 w-full overflow-hidden rounded-full"
@@ -420,67 +450,116 @@ export function PublicForm({
                   className="h-full rounded-full transition-all duration-300"
                   style={{
                     backgroundColor: primary,
-                    width: `${((safePage + 1) / totalPages) * 100}%`,
+                    width: `${progress}%`,
                   }}
                 />
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-            {pageFields.map((field) => (
-              <div key={field.id} className="flex flex-col gap-2">
-                <div className="flex items-center gap-1">
-                  <Label htmlFor={field.id}>
-                    {field.label}
-                    {field.required && <span style={{ color: primary }}> *</span>}
-                  </Label>
-                </div>
-                <FieldInput
-                  field={field}
-                  value={values[field.id]}
-                  onChange={(v) => updateValue(field.id, v)}
-                />
-                {field.helpText ? (
-                  <p className="text-xs opacity-60">{field.helpText}</p>
-                ) : null}
-                {errors[field.id] ? (
-                  <p className="text-xs text-destructive">{errors[field.id]}</p>
-                ) : null}
-              </div>
-            ))}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit(e);
+            }}
+            onKeyDown={handleKeyDown}
+            className="mt-8 flex flex-col gap-6"
+          >
+            {/* Honeypot: hidden from humans, filled by bots. */}
+            <div
+              aria-hidden="true"
+              className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden"
+            >
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+              />
+            </div>
 
-            <div className="flex items-center gap-3">
-              {isMultipage && safePage > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleBack}
-                  disabled={submitting}
-                >
-                  Back
-                </Button>
-              ) : null}
-              {isMultipage && safePage < totalPages - 1 ? (
-                <Button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex-1"
-                  style={{ backgroundColor: primary }}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1"
-                  style={{ backgroundColor: primary }}
-                >
+            {totalSteps === 0 ? (
+              <div className="flex flex-col gap-2">
+                {errors._form ? (
+                  <p className="text-xs text-destructive">{errors._form}</p>
+                ) : null}
+                <Button type="submit" disabled={submitting} style={{ backgroundColor: primary }}>
                   {submitting ? "Submitting..." : "Submit"}
                 </Button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                {currentFields.map((field) => (
+                  <div key={field.id} className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor={field.id}>
+                        {field.label}
+                        {field.required && <span style={{ color: primary }}> *</span>}
+                      </Label>
+                    </div>
+                    <FieldInput
+                      field={field}
+                      value={values[field.id]}
+                      onChange={(v) => updateValue(field.id, v)}
+                      autoFocus={currentFields.length === 1}
+                    />
+                    {field.helpText ? (
+                      <p className="text-xs opacity-60">{field.helpText}</p>
+                    ) : null}
+                    {errors[field.id] ? (
+                      <p className="text-xs text-destructive">{errors[field.id]}</p>
+                    ) : null}
+                  </div>
+                ))}
+
+                {isLastStep && TURNSTILE_SITE_KEY ? (
+                  <div className={cn("flex flex-col gap-1", errors._turnstile && "opacity-90")}>
+                    <TurnstileWidget
+                      siteKey={TURNSTILE_SITE_KEY}
+                      onToken={setTurnstileToken}
+                      onExpire={() => setTurnstileToken("")}
+                    />
+                    {errors._turnstile ? (
+                      <p className="text-xs text-destructive">{errors._turnstile}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-3">
+                  {safeStep > 0 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleBack}
+                      disabled={submitting}
+                    >
+                      Back
+                    </Button>
+                  ) : null}
+                  {isLastStep ? (
+                    <Button
+                      type="submit"
+                      disabled={submitting}
+                      className="flex-1"
+                      style={{ backgroundColor: primary }}
+                    >
+                      {submitting ? "Submitting..." : "Submit"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      className="flex-1"
+                      style={{ backgroundColor: primary }}
+                    >
+                      Next
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
           </form>
         </div>
       </div>

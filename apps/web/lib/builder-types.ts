@@ -30,6 +30,7 @@ export interface BuilderFormSettings {
   expiry?: string | null;
   responseLimit?: number | null;
   thankYouMessage?: string;
+  stepMode?: "page" | "question";
 }
 
 export interface ThemeColorSet {

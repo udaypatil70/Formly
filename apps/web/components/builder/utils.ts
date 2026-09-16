@@ -56,8 +56,11 @@ export function buildPublicForm(
     theme: theme
       ? { colors: theme.colors, font: theme.font ?? null, background: theme.background ?? null }
       : null,
-    settings: meta.settings?.thankYouMessage
-      ? { thankYouMessage: meta.settings.thankYouMessage }
+    settings: meta.settings?.thankYouMessage || meta.settings?.stepMode
+      ? {
+          thankYouMessage: meta.settings.thankYouMessage,
+          stepMode: meta.settings.stepMode,
+        }
       : undefined,
   };
 }

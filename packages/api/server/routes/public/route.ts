@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db, eq, and, desc, count, ilike } from "@repo/db";
 import {
@@ -20,6 +20,7 @@ import {
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import { fieldOutput, themeOutput } from "../../utils/schemas";
 import { rateLimit } from "../../utils/rate-limit";
+import { verifyTurnstileToken } from "../../utils/turnstile";
 
 const TAGS = ["Public"];
 
@@ -37,6 +38,7 @@ const publicFormViewOutput = z.object({
       expiry: z.string().nullable().optional(),
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().nullable().optional(),
+      stepMode: z.enum(["page", "question"]).optional(),
     })
     .optional(),
   requiresPassword: z.boolean(),
@@ -54,6 +56,8 @@ const submitInput = z.object({
   password: z.string().optional(),
   completedInSeconds: z.number().int().positive().optional(),
   answers: z.record(z.string(), z.unknown()),
+  honeypot: z.string().optional(),
+  turnstileToken: z.string().optional(),
 });
 
 /** Load a form and enforce the server-side access rules. */
@@ -157,6 +161,23 @@ export const publicRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const form = await resolveAccessibleForm(input.slug, input.password);
+
+      // Honeypot: silently accept spam so bots think the submit succeeded.
+      if (typeof input.honeypot === "string" && input.honeypot.length > 0) {
+        return { success: true, responseId: randomUUID() };
+      }
+
+      // Turnstile: reject when configured but the token is missing/invalid.
+      const turnstileOk = await verifyTurnstileToken(
+        input.turnstileToken,
+        ctx.ip ?? undefined,
+      );
+      if (!turnstileOk) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bot verification failed. Please retry.",
+        });
+      }
 
       const settings = form.settings ?? {};
 

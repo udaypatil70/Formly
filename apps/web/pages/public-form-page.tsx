@@ -40,8 +40,11 @@ export function PublicFormPage() {
     title: data.data.title,
     description: data.data.description ?? null,
     requiresPassword: data.data.requiresPassword,
-    settings: data.data.settings?.thankYouMessage
-      ? { thankYouMessage: data.data.settings.thankYouMessage }
+    settings: data.data.settings?.thankYouMessage || data.data.settings?.stepMode
+      ? {
+          thankYouMessage: data.data.settings.thankYouMessage ?? undefined,
+          stepMode: data.data.settings.stepMode,
+        }
       : undefined,
     theme: data.data.theme
       ? {

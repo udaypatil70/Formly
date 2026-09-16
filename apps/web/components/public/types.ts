@@ -30,6 +30,7 @@ export interface PublicTheme {
 
 export interface PublicFormSettings {
   thankYouMessage?: string;
+  stepMode?: "page" | "question";
 }
 
 export interface PublicFormData {

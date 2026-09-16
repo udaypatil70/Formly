@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
-import { PublicForm } from "./public-form";
+import { PublicForm, type SubmissionMeta } from "./public-form";
 import type { PublicFormData } from "./types";
 
 interface PublicFormShellProps {
@@ -20,7 +20,10 @@ export function PublicFormShell({ form, slug, password }: PublicFormShellProps) 
     },
   });
 
-  const handleSubmit = async (values: Record<string, unknown>) => {
+  const handleSubmit = async (
+    values: Record<string, unknown>,
+    meta?: SubmissionMeta,
+  ) => {
     const completedInSeconds = Math.max(
       1,
       Math.round((Date.now() - startRef.current) / 1000),
@@ -30,6 +33,8 @@ export function PublicFormShell({ form, slug, password }: PublicFormShellProps) 
       password,
       completedInSeconds,
       answers: values,
+      honeypot: meta?.honeypot,
+      turnstileToken: meta?.turnstileToken,
     });
   };
 

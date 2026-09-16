@@ -565,6 +565,25 @@ function FormSettings({
         />
       </div>
 
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="form-step-mode">Step-by-step filling</Label>
+          <p className="text-xs text-muted-foreground">
+            Show one question per screen and continue with Enter. Turn off to
+            group questions into pages with page breaks.
+          </p>
+        </div>
+        <Switch
+          id="form-step-mode"
+          checked={(settings.stepMode ?? "question") === "question"}
+          onCheckedChange={(checked) =>
+            onSettingsChange({
+              stepMode: checked ? "question" : "page",
+            })
+          }
+        />
+      </div>
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="form-response-limit">Response limit</Label>
         <Input
