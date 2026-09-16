@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   DownloadIcon,
   InboxIcon,
+  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -51,6 +52,7 @@ export function ResponsesPage() {
   const [page, setPage] = useState(1);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [search, setSearch] = useState("");
   const pageSize = 10;
 
   const formQuery = trpc.form.getById.useQuery(
@@ -65,6 +67,7 @@ export function ResponsesPage() {
       pageSize,
       ...(from ? { from: `${from}T00:00:00` } : {}),
       ...(to ? { to: `${to}T23:59:59.999` } : {}),
+      ...(search.trim() ? { search: search.trim() } : {}),
     },
     { enabled: !!formId, placeholderData: keepPreviousData },
   );
@@ -145,6 +148,19 @@ export function ResponsesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+            <Input
+              aria-label="Search answers"
+              placeholder="Search answers\u2026"
+              className="h-9 w-56 pl-8"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
           <Input
             type="date"
             aria-label="From date"
@@ -202,8 +218,8 @@ export function ResponsesPage() {
             </EmptyMedia>
             <EmptyTitle>No responses yet</EmptyTitle>
             <EmptyDescription>
-              {from || to
-                ? "No responses match the selected dates."
+              {search.trim() || from || to
+                ? "No responses match the current filters."
                 : "Published submissions for this form will appear here."}
             </EmptyDescription>
           </EmptyHeader>

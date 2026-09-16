@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, eq, and, desc, count, gte, lte, inArray } from "@repo/db";
+import { db, eq, and, desc, count, gte, lte, inArray, sql } from "@repo/db";
 import {
   answersTable,
   fieldsTable,
@@ -19,6 +19,7 @@ const listInput = z.object({
   pageSize: z.number().int().min(1).max(200).default(50),
   from: z.string().optional(),
   to: z.string().optional(),
+  search: z.string().max(100).optional(),
 });
 
 const deleteInput = z.object({ id: z.string().uuid() });
@@ -62,6 +63,40 @@ export const responseRouter = router({
       const conditions = [eq(responsesTable.formId, input.formId)];
       if (input.from) conditions.push(gte(responsesTable.submittedAt, new Date(input.from)));
       if (input.to) conditions.push(lte(responsesTable.submittedAt, new Date(input.to)));
+
+      // Text search matches responses whose answer values contain the term.
+      const searchTerm = input.search?.trim();
+      if (searchTerm) {
+        const escaped = searchTerm.replace(/[\\%_]/g, (c) => `\\${c}`);
+        const fieldRows = await db
+          .selectDistinct({ id: fieldsTable.id })
+          .from(fieldsTable)
+          .where(eq(fieldsTable.formId, input.formId))
+          .execute();
+        const fieldIds = fieldRows.map((row) => row.id);
+        const matchRows =
+          fieldIds.length > 0
+            ? await db
+                .selectDistinct({ responseId: answersTable.responseId })
+                .from(answersTable)
+                .where(
+                  and(
+                    inArray(answersTable.fieldId, fieldIds),
+                    sql`${answersTable.value}::text ILIKE ${`%${escaped}%`}`,
+                  ),
+                )
+                .execute()
+            : [];
+        if (matchRows.length === 0) {
+          return { responses: [], total: 0, page, pageSize };
+        }
+        conditions.push(
+          inArray(
+            responsesTable.id,
+            matchRows.map((m) => m.responseId),
+          ),
+        );
+      }
 
       const rows = await db
         .select()
