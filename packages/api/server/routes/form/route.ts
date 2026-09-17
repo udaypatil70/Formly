@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, eq, and, desc, count } from "@repo/db";
+import { db, eq, and, desc, count, countDistinct } from "@repo/db";
 import {
   fieldOptionsTable,
   fieldsTable,
@@ -183,8 +183,8 @@ export const formRouter = router({
       const rows = await db
         .select({
           form: formsTable,
-          responseCount: count(responsesTable.id),
-          viewCount: count(formViewsTable.id),
+          responseCount: countDistinct(responsesTable.id),
+          viewCount: countDistinct(formViewsTable.id),
         })
         .from(formsTable)
         .where(and(...conditions))

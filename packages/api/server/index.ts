@@ -8,6 +8,7 @@ import { responseRouter } from "./routes/response/route";
 import { analyticsRouter } from "./routes/analytics/route";
 import { publicRouter } from "./routes/public/route";
 import { themeRouter } from "./routes/theme/route";
+import { adminRouter } from "./routes/admin/route";
 
 export const serverRouter = router({
   health: healthRouter,
@@ -18,6 +19,7 @@ export const serverRouter = router({
   analytics: analyticsRouter,
   public: publicRouter,
   theme: themeRouter,
+  admin: adminRouter,
 });
 
 export { createContext } from "./context";
