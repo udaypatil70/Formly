@@ -1,6 +1,7 @@
 import { z, zodUndefinedModel } from "../../schema";
 import { auth } from "@repo/services/auth";
 import { publicProcedure, protectedProcedure, router } from "../../trpc";
+import { getUserRole } from "../../utils/admin";
 
 const TAGS = ["Authentication"];
 
@@ -16,6 +17,7 @@ export const authRouter = router({
             name: z.string(),
             email: z.string(),
             image: z.string().nullable().optional(),
+            role: z.enum(["admin", "user"]),
           })
           .nullable(),
         session: z
@@ -36,6 +38,7 @@ export const authRouter = router({
               name: user.name,
               email: user.email,
               image: user.image ?? null,
+              role: getUserRole(user.email),
             }
           : null,
         session: session

@@ -4,6 +4,10 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().url().default("http://localhost:8000"),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+  ADMIN_EMAILS: z
+    .string()
+    .optional()
+    .describe("Comma-separated emails that get admin panel access"),
   GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
   SMTP_HOST: z.string().optional(),
