@@ -366,7 +366,7 @@ export function AnalyticsPage() {
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/dashboard")}
         >
           <ArrowLeftIcon />
           Back to forms

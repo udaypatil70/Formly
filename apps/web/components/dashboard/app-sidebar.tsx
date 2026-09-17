@@ -24,7 +24,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="group-data-[collapsible=icon]:justify-center">
-              <Link to="/">
+              <Link to="/dashboard">
                 <span className="bg-primary flex size-8 shrink-0 items-center justify-center rounded-md text-primary-foreground [&>svg]:size-4">
                   <ClipboardPenIcon />
                 </span>
@@ -48,10 +48,10 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === "/"}
+                  isActive={pathname === "/dashboard"}
                   tooltip="My Forms"
                 >
-                  <Link to="/">
+                  <Link to="/dashboard">
                     <FolderIcon />
                     <span>My Forms</span>
                   </Link>

@@ -76,7 +76,7 @@ export function CreateFormPage() {
         <div className="mb-6 flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="text-muted-foreground -ml-2"
           >
             <ArrowLeftIcon />
@@ -162,7 +162,7 @@ export function CreateFormPage() {
                   type="button"
                   size="lg"
                   variant="outline"
-                  onClick={() => navigate("/")}
+                  onClick={() => navigate("/dashboard")}
                   disabled={loading}
                 >
                   Cancel

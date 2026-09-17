@@ -31,7 +31,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (session.data?.user) {
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [session.data?.user, navigate]);
 
@@ -83,7 +83,7 @@ export function LoginPage() {
 
       toast.success(mode === "sign-in" ? "Welcome back!" : "Account created");
       session.refetch();
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch {
       setError("Couldn't reach the API server. Is it running?");
       setLoading(false);
@@ -196,7 +196,7 @@ export function LoginPage() {
       </Card>
 
       <p className="text-muted-foreground mt-6 text-xs">
-        <Link to="/" className="hover:text-foreground">
+        <Link to="/dashboard" className="hover:text-foreground">
           Back to dashboard
         </Link>
       </p>

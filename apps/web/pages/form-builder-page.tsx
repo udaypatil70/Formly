@@ -22,7 +22,7 @@ export function FormBuilderPage() {
   }
 
   if (detail.isError || !detail.data) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const meta: FormBuilderMeta = {
