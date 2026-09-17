@@ -76,6 +76,10 @@ export const formsTable = pgTable(
         responseLimit?: number;
         thankYouMessage?: string;
         stepMode?: "page" | "question";
+        notifyOnResponse?: boolean;
+        notificationEmail?: string;
+        sendConfirmation?: boolean;
+        confirmationEmailFieldId?: string;
       }>()
       .default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -103,6 +103,10 @@ export const FormSchema = z.object({
       expiry: z.string().optional(),
       responseLimit: z.number().int().positive().optional(),
       stepMode: z.enum(["page", "question"]).optional(),
+      notifyOnResponse: z.boolean().optional(),
+      notificationEmail: z.string().optional(),
+      sendConfirmation: z.boolean().optional(),
+      confirmationEmailFieldId: z.string().uuid().optional(),
     })
     .optional(),
   createdAt: z.string().datetime(),
@@ -159,6 +163,10 @@ export const CreateFormInput = z.object({
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().max(2000).optional(),
       stepMode: z.enum(["page", "question"]).optional(),
+      notifyOnResponse: z.boolean().optional(),
+      notificationEmail: z.string().email().optional(),
+      sendConfirmation: z.boolean().optional(),
+      confirmationEmailFieldId: z.string().uuid().optional(),
     })
     .optional(),
   fields: z.array(CreateFieldInput).optional(),

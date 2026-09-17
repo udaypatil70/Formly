@@ -23,6 +23,7 @@ import { rateLimit } from "../../utils/rate-limit";
 import { verifyTurnstileToken } from "../../utils/turnstile";
 import { parseUserAgent } from "../../utils/ua";
 import { verifyPassword } from "../../utils/password";
+import { notifyNewResponse } from "../../utils/notifications";
 import type { SelectForm } from "@repo/db/schema";
 
 const TAGS = ["Public"];
@@ -136,7 +137,7 @@ export const publicRouter = router({
 
       const form = await loadPublishedForm(input.slug);
       const settings = form.settings ?? {};
-      const { password: _password, ...safeSettings } = settings;
+      const { password: _password, notificationEmail: _notificationEmail, ...safeSettings } = settings;
       const theme = await getTheme(form.themeId);
 
       const blocked = await blockedState(form);
@@ -332,10 +333,18 @@ export const publicRouter = router({
             .execute();
         }
 
-        return response.id;
+        return { id: response.id, submittedAt: response.submittedAt };
       });
 
-      return { success: true, responseId };
+      void notifyNewResponse({
+        form,
+        fields: validatorFields,
+        answers: result.data,
+        responseId: responseId.id,
+        submittedAt: responseId.submittedAt.toISOString(),
+      });
+
+      return { success: true, responseId: responseId.id };
     }),
 
   /** Explore/gallery: list published public forms (paginated, searchable). */

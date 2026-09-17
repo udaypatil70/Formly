@@ -95,6 +95,11 @@ export const formMetaOutput = z.object({
       expiry: z.string().nullable().optional(),
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().max(2000).optional(),
+      stepMode: z.enum(["page", "question"]).optional(),
+      notifyOnResponse: z.boolean().optional(),
+      notificationEmail: z.string().optional(),
+      sendConfirmation: z.boolean().optional(),
+      confirmationEmailFieldId: z.string().uuid().optional(),
     })
     .optional(),
   createdAt: z.string(),
