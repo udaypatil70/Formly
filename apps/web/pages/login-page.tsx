@@ -29,9 +29,12 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const homeFor = (user?: { role?: "admin" | "user" } | null) =>
+    user?.role === "admin" ? "/admin" : "/dashboard";
+
   useEffect(() => {
     if (session.data?.user) {
-      navigate("/dashboard", { replace: true });
+      navigate(homeFor(session.data.user), { replace: true });
     }
   }, [session.data?.user, navigate]);
 
@@ -82,8 +85,8 @@ export function LoginPage() {
       }
 
       toast.success(mode === "sign-in" ? "Welcome back!" : "Account created");
-      session.refetch();
-      navigate("/dashboard", { replace: true });
+      const next = await session.refetch();
+      navigate(homeFor(next.data?.user), { replace: true });
     } catch {
       setError("Couldn't reach the API server. Is it running?");
       setLoading(false);

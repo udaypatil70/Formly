@@ -1,5 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
-import { ClipboardPenIcon, FolderIcon, PlusIcon } from "lucide-react";
+import {
+  ClipboardPenIcon,
+  FolderIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -14,9 +19,12 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 import { cn } from "~/lib/utils";
+import { trpc } from "~/trpc/client";
 
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const session = trpc.auth.getSession.useQuery();
+  const isAdmin = session.data?.user?.role === "admin";
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -65,6 +73,20 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/admin")}
+                    tooltip="Admin Panel"
+                  >
+                    <Link to="/admin">
+                      <ShieldCheckIcon />
+                      <span>Admin Panel</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

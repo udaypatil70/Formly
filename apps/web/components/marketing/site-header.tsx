@@ -7,8 +7,7 @@ import { Button } from "~/components/ui/button";
 
 const NAV_ITEMS = [
   { label: "Features", href: "/#features" },
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "Testimonials", href: "/#testimonials" },
+  { label: "Explore", href: "/explore" },
   { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },
 ];
