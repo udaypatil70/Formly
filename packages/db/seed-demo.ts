@@ -48,10 +48,21 @@ function nextId(): string {
 const DEMO_USER_ID = "20000000-0000-4000-8000-000000000001";
 const DEMO_ACCOUNT_ID = "20000000-0000-4000-8000-000000000002";
 
+const ADMIN_USER_ID = "30000000-0000-4000-8000-000000000001";
+const ADMIN_ACCOUNT_ID = "30000000-0000-4000-8000-000000000002";
+
 const DEMO_USER: InsertUser = {
   id: DEMO_USER_ID,
   name: "Demo User",
   email: "demo@formbuilder.com",
+  emailVerified: true,
+  createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+};
+
+const ADMIN_USER: InsertUser = {
+  id: ADMIN_USER_ID,
+  name: "Admin",
+  email: "admin@formbuilder.com",
   emailVerified: true,
   createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
 };
@@ -82,6 +93,7 @@ type SeedForm = {
   themeId: string;
   createdAt: Date;
   responseCount: number;
+  isFeatured?: boolean;
   fields: SeedField[];
   textPools: Record<string, string[]>;
 };
@@ -165,6 +177,7 @@ const seedForms: SeedForm[] = [
     themeId: THEME_IDS.anime,
     createdAt: daysAgo(34),
     responseCount: 55,
+    isFeatured: true,
     fields: [
       { type: "short_text", label: "Favourite anime title", placeholder: "e.g. Re:Zero", required: true, options: undefined },
       { type: "multi_select", label: "Which genres do you enjoy?", required: true, options: [
@@ -191,6 +204,7 @@ const seedForms: SeedForm[] = [
     themeId: THEME_IDS.movies,
     createdAt: daysAgo(27),
     responseCount: 58,
+    isFeatured: true,
     fields: [
       { type: "short_text", label: "Movie you recently watched", required: true, options: undefined },
       { type: "rating", label: "Overall rating", required: true, options: undefined },
@@ -269,6 +283,7 @@ const seedForms: SeedForm[] = [
     themeId: THEME_IDS.community,
     createdAt: daysAgo(6),
     responseCount: 54,
+    isFeatured: true,
     fields: [
       { type: "short_text", label: "Your gamer tag", required: true, options: undefined },
       { type: "radio", label: "Which game mode next?", required: true, options: [
@@ -394,6 +409,30 @@ async function main() {
     .execute();
   console.log("Demo user ready: demo@formbuilder.com / demo123");
 
+  // Admin user + credential account (admin access is granted via the
+  // ADMIN_EMAILS env list at request time — this just creates the account).
+  const adminPasswordHash = betterAuthHashPassword("admin123");
+  await db
+    .insert(usersTable)
+    .values(ADMIN_USER)
+    .onConflictDoNothing({ target: usersTable.email })
+    .execute();
+  await db
+    .insert(accountsTable)
+    .values({
+      id: ADMIN_ACCOUNT_ID,
+      userId: ADMIN_USER_ID,
+      accountId: ADMIN_USER_ID,
+      providerId: "credential",
+      issuer: "local:credential",
+      password: adminPasswordHash,
+      createdAt: ADMIN_USER.createdAt,
+      updatedAt: ADMIN_USER.createdAt,
+    })
+    .onConflictDoNothing({ target: accountsTable.id })
+    .execute();
+  console.log("Admin user ready: admin@formbuilder.com / admin123");
+
   // 3. Forms, fields and options.
   for (const def of seedForms) {
     const preferredId = nextId();
@@ -406,6 +445,7 @@ async function main() {
       status: "published",
       visibility: "public",
       archived: false,
+      isFeatured: def.isFeatured ?? false,
       themeId: def.themeId,
       settings: {
         notifyOnResponse: false,
@@ -421,7 +461,7 @@ async function main() {
       .values(form)
       .onConflictDoUpdate({
         target: formsTable.slug,
-        set: { ownerId: form.ownerId, title: form.title, description: form.description, themeId: form.themeId, settings: form.settings },
+        set: { ownerId: form.ownerId, title: form.title, description: form.description, themeId: form.themeId, settings: form.settings, isFeatured: form.isFeatured },
       })
       .returning({ id: formsTable.id })
       .execute();
@@ -528,6 +568,7 @@ async function main() {
 
   console.log("\nDone. All 5 demo forms are published and prepopulated.");
   console.log("Sign in at http://localhost:3000/login with demo@formbuilder.com / demo123");
+  console.log("Admin panel at http://localhost:3000/admin with admin@formbuilder.com / admin123 (requires ADMIN_EMAILS to include the email)");
   process.exit(0);
 }
 

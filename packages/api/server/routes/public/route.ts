@@ -357,6 +357,7 @@ export const publicRouter = router({
         page: z.number().int().positive().default(1),
         pageSize: z.number().int().min(1).max(50).default(12),
         search: z.string().max(100).optional(),
+        featured: z.boolean().optional(),
         category: z
           .enum([
             "movies",
@@ -380,6 +381,7 @@ export const publicRouter = router({
             description: z.string().nullable().optional(),
             slug: z.string(),
             createdAt: z.string(),
+            isFeatured: z.boolean(),
             responseCount: z.number(),
             themeName: z.string().nullable().optional(),
             themeCategory: z.string().nullable().optional(),
@@ -411,6 +413,9 @@ export const publicRouter = router({
         const search = `%${input.search}%`;
         conditions.push(ilike(formsTable.title, search));
       }
+      if (input.featured) {
+        conditions.push(eq(formsTable.isFeatured, true));
+      }
       if (input.category) {
         conditions.push(eq(themesTable.category, input.category));
       }
@@ -428,7 +433,7 @@ export const publicRouter = router({
         .leftJoin(responsesTable, eq(responsesTable.formId, formsTable.id))
         .where(and(...conditions))
         .groupBy(formsTable.id, themesTable.id)
-        .orderBy(desc(formsTable.createdAt))
+        .orderBy(desc(formsTable.isFeatured), desc(formsTable.createdAt))
         .limit(pageSize)
         .offset((page - 1) * pageSize)
         .execute();
@@ -446,6 +451,7 @@ export const publicRouter = router({
           description: row.form.description,
           slug: row.form.slug,
           createdAt: row.form.createdAt.toISOString(),
+          isFeatured: row.form.isFeatured,
           responseCount: Number(row.responseCount),
           themeName: row.themeName ?? null,
           themeCategory: row.themeCategory ?? null,
