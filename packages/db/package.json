@@ -5,6 +5,8 @@
     "db:migrate": "dotenv -- drizzle-kit migrate",
     "db:generate": "dotenv -- drizzle-kit generate",
     "db:seed": "dotenv -- tsx seed.ts",
+    "db:seed:demo": "dotenv -- tsx seed-demo.ts",
+    "db:seed:all": "dotenv -- tsx seed.ts && dotenv -- tsx seed-demo.ts",
     "dev": "dotenv -- drizzle-kit studio"
   },
   "devDependencies": {
