@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowRightIcon,
   BarChart3Icon,
-  BellIcon,
+  Building2Icon,
   CheckIcon,
   Code2Icon,
   FileDownIcon,
@@ -12,6 +12,8 @@ import {
   MailIcon,
   MousePointerClickIcon,
   PaletteIcon,
+  PlusIcon,
+  QrCodeIcon,
   RocketIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -23,6 +25,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { cn } from "~/lib/utils";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
 
@@ -172,8 +175,67 @@ const TESTIMONIALS = [
   },
 ];
 
+type Billing = "monthly" | "yearly";
+
+const PRO_PRICES = { monthly: 10, yearly: 8 };
+
+interface LandingTier {
+  name: string;
+  tagline: string;
+  icon: typeof SparklesIcon;
+  highlight?: boolean;
+  price: number | null;
+  cta: string;
+  features: string[];
+}
+
+const LANDING_TIERS: Omit<LandingTier, "price">[] = [
+  {
+    name: "Free",
+    tagline: "For side projects and first forms",
+    icon: SparklesIcon,
+    cta: "Start for free",
+    features: [
+      "3 active forms",
+      "100 responses / month",
+      "1 branded theme",
+      "Password & expiry protection",
+      "CSV export",
+    ],
+  },
+  {
+    name: "Pro",
+    tagline: "For creators and growing teams",
+    icon: RocketIcon,
+    highlight: true,
+    cta: "Start free trial",
+    features: [
+      "Unlimited forms & responses",
+      "All 50+ branded themes",
+      "Conditional logic & multi-page forms",
+      "Real-time analytics dashboard",
+      "Email notifications + webhooks",
+      "Embed anywhere + custom slug",
+    ],
+  },
+  {
+    name: "Enterprise",
+    tagline: "For organizations at scale",
+    icon: Building2Icon,
+    cta: "Contact sales",
+    features: [
+      "Everything in Pro",
+      "SSO / SAML authentication",
+      "Custom domain",
+      "Audit logs & data retention",
+      "Dedicated success manager",
+    ],
+  },
+];
+
 export function LandingPage() {
   useScrollToHash();
+  const [billing, setBilling] = useState<Billing>("yearly");
 
   return (
     <div className="min-h-svh bg-background">
@@ -232,7 +294,7 @@ export function LandingPage() {
           </div>
 
           {/* Product mockup */}
-          <div className="relative mx-auto mt-16 max-w-4xl">
+          <div className="relative mx-auto mt-16 max-w-6xl">
             <div className="from-violet-500/15 to-fuchsia-500/5 absolute inset-x-8 -top-8 h-24 rounded-full bg-gradient-to-r blur-2xl" />
             <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-[#1c1c22]/90 shadow-2xl shadow-black/50 backdrop-blur">
               <div className="flex items-center gap-2 border-b border-border/60 bg-white/[0.03] px-4 py-3">
@@ -244,64 +306,194 @@ export function LandingPage() {
                   formforge.app/f/feedback
                 </span>
               </div>
-              <div className="grid gap-6 p-6 sm:grid-cols-[1.2fr_1fr] sm:p-8">
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-1 h-3 w-2/3 rounded-full bg-white/80" />
-                    <div className="h-2 w-1/2 rounded-full bg-white/15" />
+
+              <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-[0.95fr_1.15fr_0.9fr]">
+                {/* Form fields */}
+                <div className="flex flex-col rounded-xl border border-border/60 bg-white/[0.02]">
+                  <div className="text-muted-foreground flex items-center justify-between border-b border-border/60 px-4 py-2.5 text-xs font-medium">
+                    Form fields
+                    <span className="bg-violet-500/10 text-violet-400 rounded-full border border-violet-500/20 px-2 py-0.5 text-[10px]">
+                      5
+                    </span>
                   </div>
-                  <div className="space-y-2 rounded-xl border border-border/60 bg-white/[0.03] p-4">
-                    <div className="mb-2 h-2 w-24 rounded-full bg-white/25" />
-                    <div className="h-9 rounded-lg border border-border/60 bg-white/[0.04] px-3" />
-                  </div>
-                  <div className="space-y-2 rounded-xl border border-border/60 bg-white/[0.03] p-4">
-                    <div className="mb-2 h-2 w-32 rounded-full bg-white/25" />
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <span
-                          key={index}
-                          className={
-                            index < 4
-                              ? "text-amber-400 [&>svg]:size-4"
-                              : "text-foreground/20 [&>svg]:size-4"
-                          }
-                        >
-                          <StarIcon fill="currentColor" />
+                  <div className="space-y-1.5 p-3">
+                    {[
+                      { n: "1", name: "Full Name", type: "Short text" },
+                      { n: "2", name: "Email address", type: "Email" },
+                      { n: "3", name: "Overall rating", type: "Rating" },
+                      { n: "4", name: "How did you hear?", type: "Single select" },
+                      { n: "5", name: "Your message", type: "Long text" },
+                    ].map((field) => (
+                      <div
+                        key={field.n}
+                        className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-white/[0.03] px-2.5 py-1.5"
+                      >
+                        <span className="bg-white/[0.05] text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded text-[10px]">
+                          {field.n}
                         </span>
-                      ))}
-                    </div>
+                        <span className="flex-1 truncate text-xs font-medium">
+                          {field.name}
+                        </span>
+                        <span className="text-muted-foreground shrink-0 rounded-full border border-border/60 bg-white/[0.03] px-2 py-0.5 text-[10px]">
+                          {field.type}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="bg-violet-600 flex h-9 items-center justify-center rounded-lg text-sm font-medium text-white shadow-lg shadow-violet-600/30">
-                    Submit response
+                  <div className="p-3 pt-0">
+                    <div className="text-muted-foreground flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/60 py-1.5 text-xs transition-colors hover:border-violet-500/40 hover:text-violet-400">
+                      <PlusIcon className="size-3.5" />
+                      Add field
+                    </div>
                   </div>
                 </div>
 
-                <div className="hidden flex-col justify-between gap-4 sm:flex">
-                  <div className="rounded-xl border border-border/60 bg-white/[0.03] p-4">
-                    <div className="text-muted-foreground mb-3 text-xs">
-                      Today&apos;s views
+                {/* Live preview */}
+                <div className="flex flex-col rounded-xl border border-border/60 bg-white/[0.02]">
+                  <div className="text-muted-foreground border-b border-border/60 px-4 py-2.5 text-xs font-medium">
+                    Live preview
+                  </div>
+                  <div className="flex-1 space-y-3.5 p-4 sm:p-5">
+                    <div>
+                      <div className="text-sm font-semibold">Product Feedback</div>
+                      <div className="text-muted-foreground text-xs">
+                        Share your experience with our product
+                      </div>
                     </div>
-                    <div className="text-2xl font-semibold">1,248</div>
-                    <div className="mt-3 flex h-16 items-end gap-1.5">
-                      {[5, 8, 6, 10, 7, 12, 9, 14].map((height, index) => (
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium">Full Name</div>
+                      <div className="h-8 rounded-lg border border-border/60 bg-white/[0.04] px-3 text-xs leading-8">
+                        Sarah Chen
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium">Email Address</div>
+                      <div className="h-8 rounded-lg border border-border/60 bg-white/[0.04] px-3 text-xs leading-8">
+                        sarah@example.com
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">Overall Rating</span>
+                        <span className="text-foreground/40 text-[10px]">Required</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <span
+                            key={index}
+                            className={
+                              index < 4
+                                ? "text-amber-400 [&>svg]:size-4"
+                                : "text-foreground/20 [&>svg]:size-4"
+                            }
+                          >
+                            <StarIcon fill="currentColor" />
+                          </span>
+                        ))}
+                        <span className="text-foreground/50 ml-1 text-xs">
+                          4/5
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium">
+                        How did you hear about us?
+                      </div>
+                      <div className="space-y-1.5">
+                        {[
+                          { label: "Twitter / X", selected: true },
+                          { label: "Google Search", selected: false },
+                          { label: "A friend", selected: false },
+                          { label: "Product Hunt", selected: false },
+                        ].map((option) => (
+                          <div
+                            key={option.label}
+                            className={cn(
+                              "flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs",
+                              option.selected
+                                ? "border-violet-500/40 bg-violet-500/10 text-violet-300"
+                                : "border-border/60 text-muted-foreground",
+                            )}
+                          >
+                            {option.label}
+                            {option.selected && <CheckIcon className="size-3.5" />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-violet-600 flex h-8 items-center justify-center rounded-lg text-xs font-medium text-white shadow-lg shadow-violet-600/25">
+                      Submit response
+                    </div>
+                  </div>
+                </div>
+
+                {/* Responses */}
+                <div className="flex flex-col rounded-xl border border-border/60 bg-white/[0.02]">
+                  <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 text-xs font-medium">
+                    <span className="text-muted-foreground">Responses</span>
+                    <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                      <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                      Live
+                    </span>
+                  </div>
+                  <div className="flex-1 p-4 sm:p-5">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <div className="text-2xl font-semibold">127</div>
+                        <div className="text-muted-foreground text-xs">
+                          Total responses
+                        </div>
+                      </div>
+                      <span className="text-emerald-400 text-xs font-medium">
+                        +12 today
+                      </span>
+                    </div>
+                    <div className="mt-3 flex h-12 items-end gap-1">
+                      {[6, 9, 5, 11, 8, 10, 12].map((height, index) => (
                         <span
                           key={index}
                           className="flex-1 rounded-sm bg-violet-500/40"
-                          style={{ height: `${height * 35}%` }}
+                          style={{ height: `${height * 3}px` }}
                         />
                       ))}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                    <span className="bg-emerald-500/20 flex size-9 items-center justify-center rounded-full text-emerald-400">
-                      <BellIcon className="size-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-emerald-300">
-                        New response
+                    <div className="text-muted-foreground mt-1 text-[10px]">
+                      Last 7 days
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {[
+                        { initials: "S", name: "Sarah C.", time: "just now", className: "bg-violet-500/20 text-violet-300" },
+                        { initials: "J", name: "James R.", time: "3m ago", className: "bg-amber-500/20 text-amber-300" },
+                        { initials: "P", name: "Priya N.", time: "8m ago", className: "bg-emerald-500/20 text-emerald-300" },
+                      ].map((person) => (
+                        <div key={person.name} className="flex items-center gap-2.5">
+                          <span
+                            className={cn(
+                              "flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                              person.className,
+                            )}
+                          >
+                            {person.initials}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-medium">
+                              {person.name}
+                            </div>
+                            <div className="text-muted-foreground text-[10px]">
+                              {person.time}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="flex items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-white/[0.03] py-1.5 text-xs">
+                        <FileDownIcon className="size-3.5" />
+                        Export CSV
                       </div>
-                      <div className="text-muted-foreground truncate text-xs">
-                        via email notification · just now
+                      <div className="flex items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-white/[0.03] py-1.5 text-xs">
+                        <QrCodeIcon className="size-3.5" />
+                        Share QR
                       </div>
                     </div>
                   </div>
@@ -439,6 +631,143 @@ export function LandingPage() {
               </Card>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="border-t border-border/60 bg-white/[0.02] scroll-mt-20">
+        <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+          <SectionHeading
+            eyebrow="Pricing"
+            title={
+              <>
+                Start free.{" "}
+                <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                  Scale when you&apos;re ready.
+                </span>
+              </>
+            }
+            description="Every plan includes unlimited viewers, bot protection, and exports. No credit card required."
+          />
+
+          <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border/60 bg-white/[0.03] p-1">
+            {(["monthly", "yearly"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setBilling(option)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                  billing === option
+                    ? "bg-violet-600 text-white shadow-lg shadow-violet-600/25"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option === "monthly" ? "Monthly" : "Yearly"}
+                {option === "yearly" && (
+                  <span
+                    className={cn(
+                      "ml-1.5 text-xs",
+                      billing === option ? "text-white/80" : "text-emerald-400",
+                    )}
+                  >
+                    −20%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {LANDING_TIERS.map((tier) => {
+              const price = tier.name === "Pro" ? PRO_PRICES[billing] : null;
+              return (
+                <Card
+                  key={tier.name}
+                  className={cn(
+                    "relative flex flex-col p-6",
+                    tier.highlight
+                      ? "border-violet-500/40 bg-gradient-to-b from-violet-950/40 to-white/[0.02] shadow-xl shadow-violet-500/10"
+                      : "border-border/60 bg-white/[0.02]",
+                  )}
+                >
+                  {tier.highlight && (
+                    <Badge className="bg-violet-600 text-white shadow-lg shadow-violet-600/30">
+                      Most popular
+                    </Badge>
+                  )}
+                  <span
+                    className={cn(
+                      "mt-4 flex size-11 items-center justify-center rounded-xl border [&>svg]:size-5",
+                      tier.highlight
+                        ? "border-violet-500/30 bg-violet-500/15 text-violet-300"
+                        : "border-border/60 bg-white/[0.04] text-muted-foreground",
+                    )}
+                  >
+                    <tier.icon />
+                  </span>
+                  <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
+                  <p className="text-muted-foreground text-sm">{tier.tagline}</p>
+                  <div className="mt-5 flex items-baseline gap-1">
+                    <span className="text-4xl font-semibold tracking-tight">
+                      {price === null ? "Custom" : `$${price}`}
+                    </span>
+                    {price !== null && (
+                      <span className="text-muted-foreground text-sm">
+                        / month
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground mt-1 h-4 text-xs">
+                    {tier.name === "Pro" && billing === "yearly"
+                      ? "billed annually"
+                      : tier.name === "Free"
+                        ? "free forever"
+                        : price === null
+                          ? "tailored to your team"
+                          : ""}
+                  </p>
+                  <Button
+                    asChild
+                    className={cn(
+                      "mt-6 w-full",
+                      tier.highlight
+                        ? "bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500"
+                        : tier.name === "Enterprise"
+                          ? "bg-white text-zinc-900 hover:bg-white/90"
+                          : "border-border/60 bg-white/5 backdrop-blur hover:bg-white/10",
+                    )}
+                  >
+                    <Link to="/login">
+                      {tier.cta}
+                      <ArrowRightIcon />
+                    </Link>
+                  </Button>
+                  <ul className="mt-7 space-y-3">
+                    {tier.features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="flex items-start gap-2.5 text-sm"
+                      >
+                        <CheckIcon className="text-emerald-400 mt-0.5 size-4 shrink-0" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              );
+            })}
+          </div>
+
+          <p className="text-muted-foreground mt-10 text-center text-sm">
+            Need the full breakdown?{" "}
+            <Link
+              to="/pricing"
+              className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+            >
+              Compare every feature →
+            </Link>
+          </p>
         </div>
       </section>
 

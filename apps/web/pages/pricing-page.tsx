@@ -27,7 +27,7 @@ type Billing = "monthly" | "yearly";
 
 const PRICES = {
   free: { monthly: 0, yearly: 0 },
-  pro: { monthly: 12, yearly: 9 },
+  pro: { monthly: 10, yearly: 8 },
   enterprise: { monthly: null, yearly: null },
 };
 
@@ -138,7 +138,7 @@ const FAQS = [
   {
     question: "How does billing work?",
     answer:
-      "You're billed per month (or per year with 25% off). All paid plans include a 14-day free trial — no credit card required to get started.",
+      "You're billed per month (or per year with 20% off). All paid plans include a 14-day free trial — no credit card required to get started.",
   },
   {
     question: "Is my data secure?",
@@ -202,7 +202,7 @@ export function PricingPage() {
                       billing === option ? "text-white/80" : "text-emerald-400",
                     )}
                   >
-                    −25%
+                    −20%
                   </span>
                 )}
               </button>
@@ -315,7 +315,7 @@ export function PricingPage() {
                       {name}
                       {name === "Pro" && (
                         <div className="text-muted-foreground mt-0.5 text-xs font-normal">
-                          $9/mo billed yearly
+                          $8/mo billed yearly
                         </div>
                       )}
                     </th>
