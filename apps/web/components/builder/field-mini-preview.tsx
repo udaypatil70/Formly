@@ -49,6 +49,18 @@ export function FieldMiniPreview({ field }: FieldMiniPreviewProps) {
       return <Input defaultValue="" disabled type="time" />;
     case "file_upload":
       return <Input defaultValue="" disabled placeholder="No file chosen" />;
+    case "payment": {
+      const amount = field.validationRules?.amount;
+      return (
+        <Input
+          disabled
+          value=""
+          placeholder={
+            amount ? `Pay ₹${amount} (Razorpay)` : "Set an amount in settings"
+          }
+        />
+      );
+    }
     case "short_text":
     default:
       return (

@@ -195,8 +195,16 @@ export const responseRouter = router({
         } else if (value === null || value === undefined) {
           str = "";
         } else if (typeof value === "object") {
-          const file = value as { name?: string; url?: string };
-          str = file.name ?? (file.url ? String(file.url) : "");
+          const payment = value as { amount?: number; currency?: string };
+          if (
+            typeof payment.amount === "number" &&
+            typeof payment.currency === "string"
+          ) {
+            str = `Paid ${payment.currency} ${payment.amount}`;
+          } else {
+            const file = value as { name?: string; url?: string };
+            str = file.name ?? (file.url ? String(file.url) : "");
+          }
         } else {
           str = String(value);
         }

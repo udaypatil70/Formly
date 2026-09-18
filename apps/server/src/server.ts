@@ -11,6 +11,7 @@ import { auth } from "@repo/services/auth";
 
 import { env } from "./env";
 import { uploadsRouter } from "./uploads";
+import { paymentsRouter } from "./payments";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -33,7 +34,17 @@ if (env.NODE_ENV !== "prod") {
   );
 }
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      // Keep the raw request body for signed webhooks (Razorpay signatures
+      // are computed over the exact bytes sent).
+      if (buf?.length) {
+        (req as Express.Request & { rawBody?: Buffer }).rawBody = buf;
+      }
+    },
+  }),
+);
 
 app.get("/", (_req, res) => {
   return res.json({ message: "Formforge is up and running..." });
@@ -83,6 +94,11 @@ app.all("/auth/{*path}", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+app.use(
+  "/api/payments",
+  paymentsRouter(),
+);
 
 app.use(
   "/api",

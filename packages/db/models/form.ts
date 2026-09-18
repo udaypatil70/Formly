@@ -43,6 +43,14 @@ export const fieldTypeEnum = pgEnum("field_type", [
   "time",
   "scale",
   "file_upload",
+  "payment",
+]);
+
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "created",
+  "paid",
+  "failed",
+  "refunded",
 ]);
 
 export const themeCategoryEnum = pgEnum("theme_category", [
@@ -128,6 +136,8 @@ export type FormVersionField = {
     min?: number;
     max?: number;
     pattern?: string;
+    amount?: number;
+    currency?: string;
   } | null;
   conditionalLogic: {
     showIf?: {
@@ -219,6 +229,9 @@ export const fieldsTable = pgTable(
         pattern?: string;
         maxSize?: number;
         allowedTypes?: string[];
+        /* Payment field (amount in whole rupees, currency like "INR"). */
+        amount?: number;
+        currency?: string;
       }>()
       .default({}),
     conditionalLogic: jsonb("conditional_logic")
@@ -312,7 +325,7 @@ export const answersTable = pgTable(
       .notNull()
       .references(() => fieldsTable.id, { onDelete: "cascade" }),
     value: jsonb("value").$type<
-      string | number | boolean | string[] | FileAnswer
+      string | number | boolean | string[] | FileAnswer | PaymentAnswer
     >(),
   },
   (table) => [
@@ -322,6 +335,51 @@ export const answersTable = pgTable(
       table.responseId,
       table.fieldId,
     ),
+  ],
+);
+
+// ─── Payments (Razorpay) ─────────────────────────────────
+// Tracks a Razorpay order for a payment field. A row is created when a
+// visitor opens checkout and is marked "paid" once the signature verifies
+// on submission. Webhooks keep status in sync (captured/refunded/failed).
+
+export type PaymentAnswer = {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  status: "paid" | "refunded";
+};
+
+export const formPaymentsTable = pgTable(
+  "form_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" }),
+    fieldId: uuid("field_id")
+      .notNull()
+      .references(() => fieldsTable.id, { onDelete: "cascade" }),
+    responseId: uuid("response_id").references(() => responsesTable.id, {
+      onDelete: "set null",
+    }),
+    razorpayOrderId: varchar("razorpay_order_id", { length: 255 })
+      .notNull()
+      .unique(),
+    razorpayPaymentId: varchar("razorpay_payment_id", { length: 255 }),
+    amountPaise: integer("amount_paise").notNull(),
+    currency: varchar("currency", { length: 3 }).default("INR").notNull(),
+    status: paymentStatusEnum("status").default("created").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    paidAt: timestamp("paid_at"),
+  },
+  (table) => [
+    index("form_payments_form_id_idx").on(table.formId),
+    index("form_payments_field_id_idx").on(table.fieldId),
+    index("form_payments_order_id_idx").on(table.razorpayOrderId),
+    index("form_payments_status_idx").on(table.status),
   ],
 );
 
@@ -415,6 +473,8 @@ export type SelectAnswer = typeof answersTable.$inferSelect;
 export type InsertAnswer = typeof answersTable.$inferInsert;
 export type SelectFormView = typeof formViewsTable.$inferSelect;
 export type InsertFormView = typeof formViewsTable.$inferInsert;
+export type SelectFormPayment = typeof formPaymentsTable.$inferSelect;
+export type InsertFormPayment = typeof formPaymentsTable.$inferInsert;
 export type SelectFormVersion = typeof formVersionsTable.$inferSelect;
 export type InsertFormVersion = typeof formVersionsTable.$inferInsert;
 export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;

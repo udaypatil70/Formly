@@ -28,12 +28,17 @@ import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 
-type FileAnswerValue = {
+type AnswerValueObject = {
   fileId?: string;
   name?: string;
   url?: string;
   size?: number;
   mimeType?: string;
+  paymentId?: string;
+  orderId?: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
 };
 
 type ResponseRow = {
@@ -43,7 +48,7 @@ type ResponseRow = {
   answers: {
     fieldId: string;
     fieldLabel: string;
-    value: string | number | boolean | string[] | FileAnswerValue | null;
+    value: string | number | boolean | string[] | AnswerValueObject | null;
   }[];
 };
 
@@ -359,6 +364,24 @@ export function ResponsesPage() {
                           >
                             {answer.value.name ?? "Download file"}
                           </a>
+                        ) : "amount" in answer.value &&
+                          typeof answer.value.amount === "number" &&
+                          typeof answer.value.currency === "string" ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="font-medium">
+                              Paid {answer.value.currency} {answer.value.amount}
+                            </span>
+                            <span
+                              className={
+                                "rounded-full px-2 py-0.5 text-xs font-medium " +
+                                (answer.value.status === "refunded"
+                                  ? "bg-amber-500/15 text-amber-400"
+                                  : "bg-emerald-500/15 text-emerald-400")
+                              }
+                            >
+                              {answer.value.status ?? "paid"}
+                            </span>
+                          </span>
                         ) : (
                           answer.value.name ?? "File"
                         )
@@ -390,10 +413,18 @@ export function ResponsesPage() {
 }
 
 function formatAnswerValue(
-  value: string | number | boolean | string[] | FileAnswerValue | null,
+  value: string | number | boolean | string[] | AnswerValueObject | null,
 ): string {
   if (Array.isArray(value)) return value.join(", ");
   if (value === null || value === undefined) return "\u2014";
+  if (
+    typeof value === "object" &&
+    "amount" in value &&
+    typeof value.amount === "number" &&
+    typeof value.currency === "string"
+  ) {
+    return `Paid ${value.currency} ${value.amount}`;
+  }
   if (typeof value === "object") return value.name ?? value.url ?? "File";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);

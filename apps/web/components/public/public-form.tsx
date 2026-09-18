@@ -1,6 +1,12 @@
 import React, { useMemo, useRef, useState } from "react";
 import { buildResponseSchema, type Field } from "@repo/validators";
-import { CheckCircle2Icon, StarIcon, UploadIcon, XIcon } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  CreditCardIcon,
+  StarIcon,
+  UploadIcon,
+  XIcon,
+} from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -18,21 +24,93 @@ import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { getApiOrigin } from "~/lib/api-origin";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
+import { trpc } from "~/trpc/client";
 import { TurnstileWidget } from "./turnstile-widget";
-import type { FileAnswer, PublicField, PublicFormData } from "./types";
+import type {
+  FileAnswer,
+  PaymentAnswer,
+  PublicField,
+  PublicFormData,
+} from "./types";
+
+export interface PaidPayment {
+  fieldId: string;
+  orderId: string;
+  paymentId: string;
+  signature: string;
+}
 
 export interface SubmissionMeta {
   honeypot?: string;
   turnstileToken?: string;
+  payments?: PaidPayment[];
 }
 
 interface PublicFormProps {
   form: PublicFormData;
   onSubmit: (values: Record<string, unknown>, meta?: SubmissionMeta) => Promise<void>;
   onReset?: () => void;
+  /** Shared link slug + password so payments can create an order server-side. */
+  slug?: string;
+  password?: string;
+  /** When true (builder preview) payments are simulated and never charged. */
+  previewMode?: boolean;
+  /** Reports payment answers as they complete so a parent can collect them. */
+  onPaymentsChange?: (payments: PaidPayment[]) => void;
 }
 
 const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
+
+interface RazorpayCheckoutHandlerResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayCheckoutOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description?: string;
+  order_id: string;
+  handler: (response: RazorpayCheckoutHandlerResponse) => void;
+  prefill?: { name?: string; email?: string; contact?: string };
+  theme?: { color?: string };
+  modal?: { onDismiss?: () => void };
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayCheckoutOptions) => { open(): void };
+  }
+}
+
+let checkoutScriptPromise: Promise<void> | null = null;
+
+function loadCheckoutScript(): Promise<void> {
+  if (checkoutScriptPromise) return checkoutScriptPromise;
+  checkoutScriptPromise = new Promise<void>((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Payment is unavailable"));
+      return;
+    }
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      checkoutScriptPromise = null;
+      reject(new Error("Could not load the payment gateway"));
+    };
+    document.body.appendChild(script);
+  });
+  return checkoutScriptPromise;
+}
 
 type ConditionalRule = NonNullable<PublicField["conditionalLogic"]>["showIf"] & {
   operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
@@ -84,12 +162,20 @@ function FieldInput({
   onChange,
   autoFocus,
   formId,
+  payment,
 }: {
   field: PublicField;
   value: unknown;
   onChange: (value: unknown) => void;
   autoFocus?: boolean;
   formId: string;
+  payment?: {
+    formTitle: string;
+    slug?: string;
+    password?: string;
+    previewMode?: boolean;
+    onPaid: (p: PaidPayment) => void;
+  };
 }) {
   switch (field.type) {
     case "short_text":
@@ -314,6 +400,19 @@ function FieldInput({
           autoFocus={autoFocus}
         />
       );
+    case "payment":
+      return (
+        <PaymentInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          formTitle={payment?.formTitle ?? ""}
+          slug={payment?.slug}
+          password={payment?.password}
+          previewMode={payment?.previewMode ?? false}
+          onPaid={payment?.onPaid ?? (() => undefined)}
+        />
+      );
     default:
       return null;
   }
@@ -439,6 +538,140 @@ function FileUploadInput({
   );
 }
 
+function PaymentInput({
+  field,
+  value,
+  onChange,
+  formTitle,
+  slug,
+  password,
+  previewMode,
+  onPaid,
+}: {
+  field: PublicField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  formTitle: string;
+  slug?: string;
+  password?: string;
+  previewMode?: boolean;
+  onPaid: (p: PaidPayment) => void;
+}) {
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const createOrder = trpc.payment.createOrder.useMutation();
+
+  const amount = Number(field.validationRules?.amount ?? 0);
+  const currency = (field.validationRules?.currency ?? "INR").toUpperCase();
+
+  const paid = value && typeof value === "object" && "orderId" in value
+      ? (value as PaymentAnswer)
+      : null;
+
+  const pay = async () => {
+    setError(null);
+
+    if (previewMode) {
+      onChange({
+        paymentId: "preview",
+        orderId: `preview-${field.id}`,
+        amount: Math.max(amount, 1),
+        currency,
+        status: "paid",
+      } satisfies PaymentAnswer);
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      setError("This payment field has no amount configured yet.");
+      return;
+    }
+    if (!slug) {
+      setError("Payments are not available in the preview.");
+      return;
+    }
+
+    setPaying(true);
+    try {
+      const order = await createOrder.mutateAsync({
+        slug,
+        password,
+        fieldId: field.id,
+      });
+
+      await loadCheckoutScript();
+      if (!window.Razorpay) {
+        throw new Error("Payment gateway is unavailable");
+      }
+
+      const checkout = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount * 100,
+        currency: order.currency,
+        name: formTitle || "Payment",
+        description: field.label,
+        order_id: order.orderId,
+        theme: { color: "#6d28d9" },
+        modal: {
+          onDismiss: () => setPaying(false),
+        },
+        handler: (response) => {
+          onPaid({
+            fieldId: field.id,
+            orderId: response.razorpay_order_id,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+          });
+          onChange({
+            paymentId: response.razorpay_payment_id,
+            orderId: response.razorpay_order_id,
+            amount: order.amount,
+            currency: order.currency,
+            status: "paid",
+          } satisfies PaymentAnswer);
+          setPaying(false);
+        },
+      });
+      checkout.open();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payment failed");
+      setPaying(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {paid ? (
+        <div className="flex items-center gap-2 rounded-md px-1 py-1">
+          <CheckCircle2Icon className="size-4 text-emerald-500" />
+          <span className="text-sm">
+            Paid {currency} {paid.amount}
+            {paid.status === "refunded" ? " (refunded)" : ""}
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={paying || !amount}
+            onClick={() => void pay()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: "#6d28d9" }}
+          >
+            <CreditCardIcon className="size-4" />
+            {paying
+              ? "Opening payment…"
+              : amount
+                ? `Pay ${currency} ${amount}`
+                : "Set an amount in settings"}
+          </button>
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function toValidatorFields(fields: PublicField[]): Field[] {
   return fields.map((f, index) => ({
     id: f.id,
@@ -462,6 +695,10 @@ export function PublicForm({
   form,
   onSubmit,
   onReset,
+  slug,
+  password,
+  previewMode = false,
+  onPaymentsChange,
 }: PublicFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -471,6 +708,7 @@ export function PublicForm({
   const [started, setStarted] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const paymentsRef = useRef<PaidPayment[]>([]);
 
   const stepMode = form.settings?.stepMode ?? "all";
   const startScreen = form.settings?.startScreen;
@@ -580,6 +818,7 @@ export function PublicForm({
             setSubmitted(false);
             setValues({});
             setErrors({});
+            paymentsRef.current = [];
             setStarted(true);
             setCurrentStep(0);
             onReset?.();
@@ -694,7 +933,9 @@ export function PublicForm({
       await onSubmit(result.data, {
         honeypot: honeypot || "",
         turnstileToken: turnstileToken || undefined,
+        payments: paymentsRef.current.length > 0 ? paymentsRef.current : undefined,
       });
+      paymentsRef.current = [];
       setSubmitted(true);
     } finally {
       setSubmitting(false);
@@ -825,6 +1066,19 @@ export function PublicForm({
                       onChange={(v) => updateValue(field.id, v)}
                       autoFocus={currentFields.length === 1}
                       formId={form.id}
+                      payment={{
+                        formTitle: form.title,
+                        slug,
+                        password,
+                        previewMode,
+                        onPaid: (p) => {
+                          paymentsRef.current = paymentsRef.current.filter(
+                            (existing) => existing.fieldId !== p.fieldId,
+                          );
+                          paymentsRef.current.push(p);
+                          onPaymentsChange?.(paymentsRef.current);
+                        },
+                      }}
                     />
                     {field.helpText ? (
                       <p className="text-xs opacity-60">{field.helpText}</p>

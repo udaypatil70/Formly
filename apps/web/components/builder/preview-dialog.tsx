@@ -77,6 +77,7 @@ export function PreviewDialog({ open, onOpenChange, form }: PreviewDialogProps) 
                   <PublicForm
                     key={`${resetKey}-mobile`}
                     form={form}
+                    previewMode
                     onSubmit={async () => {
                       testPassed.current = true;
                     }}
@@ -88,6 +89,7 @@ export function PreviewDialog({ open, onOpenChange, form }: PreviewDialogProps) 
               <PublicForm
                 key={`${resetKey}-desktop`}
                 form={form}
+                previewMode
                 onSubmit={async () => {
                   testPassed.current = true;
                 }}

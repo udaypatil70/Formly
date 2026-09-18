@@ -13,6 +13,13 @@ function formatAnswerValue(value: unknown): string {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") {
+    const payment = value as { amount?: unknown; currency?: unknown };
+    if (
+      typeof payment.amount === "number" &&
+      typeof payment.currency === "string"
+    ) {
+      return `Paid ${payment.currency} ${payment.amount}`;
+    }
     const file = value as { name?: unknown; url?: unknown };
     return `${String(file.name ?? "file")}${file.url ? ` (${String(file.url)})` : ""}`;
   }

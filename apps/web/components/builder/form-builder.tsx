@@ -743,6 +743,8 @@ function defaultLabel(type: BuilderField["type"]): string {
       return "Website";
     case "file_upload":
       return "File upload";
+    case "payment":
+      return "Payment";
     case "page_break":
       return "Page break";
     default:

@@ -7,9 +7,14 @@ import {
   responsesTable,
   themesTable,
   formViewsTable,
+  formPaymentsTable,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
-import { buildResponseSchema, AnswerValueSchema } from "@repo/validators";
+import {
+  buildResponseSchema,
+  AnswerValueSchema,
+  PaymentAnswerValueSchema,
+} from "@repo/validators";
 import { router, publicProcedure } from "../../trpc";
 import {
   getFieldsForForm,
@@ -25,6 +30,10 @@ import { parseUserAgent } from "../../utils/ua";
 import { verifyPassword } from "../../utils/password";
 import { notifyNewResponse } from "../../utils/notifications";
 import { triggerWebhooks } from "../../utils/webhooks";
+import {
+  razorpayConfigured,
+  verifyRazorpaySignature,
+} from "../../utils/razorpay";
 import type { SelectForm } from "@repo/db/schema";
 
 const TAGS = ["Public"];
@@ -82,6 +91,17 @@ const submitInput = z.object({
   answers: z.record(z.string(), z.unknown()),
   honeypot: z.string().optional(),
   turnstileToken: z.string().optional(),
+  payments: z
+    .array(
+      z.object({
+        fieldId: z.string().uuid(),
+        orderId: z.string().min(1),
+        paymentId: z.string().min(1),
+        signature: z.string().min(1),
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 /** Load a published, non-archived form by slug. */
@@ -321,6 +341,100 @@ export const publicRouter = router({
         });
       }
 
+      // Payment fields: every one must have a verified, unused Razorpay
+      // payment. The payment answer is rebuilt server-side from the order we
+      // created, never trusted from the client payload.
+      const paymentFields = validatorFields.filter(
+        (f) => f.type === "payment",
+      );
+      const pendingPayments: {
+        row: { id: string };
+        answer: z.infer<typeof PaymentAnswerValueSchema>;
+      }[] = [];
+
+      if (paymentFields.length > 0) {
+        if (!razorpayConfigured()) {
+          throw new TRPCError({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Payments are not configured yet",
+          });
+        }
+        const payments = input.payments ?? [];
+        for (const field of paymentFields) {
+          const entry = payments.find((p) => p.fieldId === field.id);
+          if (!entry) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Payment required for "${field.label}"`,
+            });
+          }
+
+          const signatureValid = verifyRazorpaySignature({
+            orderId: entry.orderId,
+            paymentId: entry.paymentId,
+            signature: entry.signature,
+          });
+          if (!signatureValid) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Payment verification failed. Please try again.",
+            });
+          }
+
+          const rows = await db
+            .select({
+              id: formPaymentsTable.id,
+              status: formPaymentsTable.status,
+              amountPaise: formPaymentsTable.amountPaise,
+              currency: formPaymentsTable.currency,
+            })
+            .from(formPaymentsTable)
+            .where(
+              and(
+                eq(formPaymentsTable.razorpayOrderId, entry.orderId),
+                eq(formPaymentsTable.formId, form.id),
+                eq(formPaymentsTable.fieldId, field.id),
+              ),
+            )
+            .limit(1)
+            .execute();
+
+          const paymentRow = rows[0];
+          if (!paymentRow) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Payment order not found for this form",
+            });
+          }
+          if (paymentRow.status !== "created") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "This payment has already been used",
+            });
+          }
+
+          const expectedPaise = Math.round(
+            (field.validationRules?.amount ?? 0) * 100,
+          );
+          if (expectedPaise <= 0 || paymentRow.amountPaise !== expectedPaise) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Payment amount does not match",
+            });
+          }
+
+          const answer = PaymentAnswerValueSchema.parse({
+            paymentId: entry.paymentId,
+            orderId: entry.orderId,
+            amount: expectedPaise / 100,
+            currency: paymentRow.currency,
+            status: "paid",
+          });
+          result.data[field.id] = answer;
+          pendingPayments.push({ row: { id: paymentRow.id }, answer });
+        }
+      }
+
       const responseId = await db.transaction(async (tx) => {
         const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
         const inserted = await tx
@@ -347,6 +461,19 @@ export const publicRouter = router({
                 value: value as z.infer<typeof AnswerValueSchema> | null,
               })),
             )
+            .execute();
+        }
+
+        for (const payment of pendingPayments) {
+          await tx
+            .update(formPaymentsTable)
+            .set({
+              status: "paid",
+              razorpayPaymentId: payment.answer.paymentId,
+              responseId: response.id,
+              paidAt: new Date(),
+            })
+            .where(eq(formPaymentsTable.id, payment.row.id))
             .execute();
         }
 

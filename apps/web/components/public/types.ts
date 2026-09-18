@@ -53,6 +53,14 @@ export interface FileAnswer {
   mimeType: string;
 }
 
+export interface PaymentAnswer {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  status: "paid" | "refunded";
+}
+
 export interface PublicFormData {
   id: string;
   title: string;

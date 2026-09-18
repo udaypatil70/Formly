@@ -9,6 +9,9 @@ const envSchema = z.object({
     .string()
     .default("./uploads")
     .describe("Directory for uploaded response files"),
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

@@ -60,6 +60,7 @@ const FIELD_TYPES: FieldType[] = [
   "date",
   "time",
   "file_upload",
+  "payment",
 ];
 
 export function FieldInspector({
@@ -183,6 +184,7 @@ function FieldSettings({
     field.type === "time";
   const acceptsNumber = field.type === "number" || field.type === "scale";
   const isFileUpload = field.type === "file_upload";
+  const isPayment = field.type === "payment";
   const hasOptions =
     field.type === "single_select" ||
     field.type === "multi_select" ||
@@ -195,7 +197,8 @@ function FieldSettings({
     field.type === "single_select" ||
     field.type === "multi_select" ||
     field.type === "radio" ||
-    field.type === "file_upload";
+    field.type === "file_upload" ||
+    field.type === "payment";
 
   return (
     <>
@@ -276,6 +279,13 @@ function FieldSettings({
 
       {isFileUpload && (
         <FileUploadConfig
+          field={field}
+          onUpdate={onUpdate}
+        />
+      )}
+
+      {isPayment && (
+        <PaymentConfig
           field={field}
           onUpdate={onUpdate}
         />
@@ -531,6 +541,76 @@ function FileUploadConfig({
           zip).
         </p>
       </div>
+    </div>
+  );
+}
+
+function PaymentConfig({
+  field,
+  onUpdate,
+}: {
+  field: BuilderField;
+  onUpdate: (id: string, patch: Partial<BuilderField>) => void;
+}) {
+  const rules = field.validationRules ?? {};
+  const amount = rules.amount ?? "";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Label>Payment settings</Label>
+      <div className="flex flex-col gap-2">
+        <Label
+          htmlFor="field-payment-amount"
+          className="text-xs text-muted-foreground"
+        >
+          Amount (whole rupees)
+        </Label>
+        <Input
+          id="field-payment-amount"
+          type="number"
+          min={1}
+          step={1}
+          placeholder="e.g. 99"
+          value={amount}
+          onChange={(e) =>
+            onUpdate(field.id, {
+              validationRules: {
+                ...rules,
+                amount:
+                  e.target.value === "" ? undefined : Math.max(1, Math.round(Number(e.target.value) || 0)),
+                currency: rules.currency ?? "INR",
+              },
+            })
+          }
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label
+          htmlFor="field-payment-currency"
+          className="text-xs text-muted-foreground"
+        >
+          Currency
+        </Label>
+        <Select
+          value={(rules.currency ?? "INR").toUpperCase()}
+          onValueChange={(v) =>
+            onUpdate(field.id, {
+              validationRules: { ...rules, currency: v },
+            })
+          }
+        >
+          <SelectTrigger id="field-payment-currency" className="w-full">
+            <SelectValue placeholder="INR" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="INR">INR — Indian Rupee (₹)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Collect a payment from every respondent through Razorpay before their
+        response is submitted.
+      </p>
     </div>
   );
 }

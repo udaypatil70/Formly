@@ -11,6 +11,7 @@ import { themeRouter } from "./routes/theme/route";
 import { adminRouter } from "./routes/admin/route";
 import { templateRouter } from "./routes/template/route";
 import { webhookRouter } from "./routes/webhook/route";
+import { paymentRouter } from "./routes/payment/route";
 
 export const serverRouter = router({
   health: healthRouter,
@@ -24,6 +25,7 @@ export const serverRouter = router({
   admin: adminRouter,
   template: templateRouter,
   webhook: webhookRouter,
+  payment: paymentRouter,
 });
 
 export { createContext } from "./context";

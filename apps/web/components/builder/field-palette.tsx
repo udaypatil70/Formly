@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   CircleDotIcon,
   ClockIcon,
+  CreditCardIcon,
   FileUpIcon,
   GaugeIcon,
   HashIcon,
@@ -42,6 +43,7 @@ export const PALETTE_ITEMS: {
   { type: "phone", label: "Phone", icon: PhoneIcon },
   { type: "url", label: "Website", icon: LinkIcon },
   { type: "file_upload", label: "File upload", icon: FileUpIcon },
+  { type: "payment", label: "Payment", icon: CreditCardIcon },
   { type: "page_break", label: "Page break", icon: SeparatorHorizontalIcon },
 ];
 
@@ -70,6 +72,7 @@ export const PALETTE_GROUPS: {
         "rating",
         "scale",
         "file_upload",
+        "payment",
       ].includes(type),
     ),
   },

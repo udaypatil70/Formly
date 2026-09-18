@@ -3,15 +3,24 @@ import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
 import { PublicForm, type SubmissionMeta } from "./public-form";
+import type { PaidPayment } from "./public-form";
 import type { PublicFormData } from "./types";
 
 interface PublicFormShellProps {
   form: PublicFormData;
   slug: string;
   password?: string;
+  onPaymentsChange?: (payments: PaidPayment[]) => void;
+  previewMode?: boolean;
+  formTitle?: string;
 }
 
-export function PublicFormShell({ form, slug, password }: PublicFormShellProps) {
+export function PublicFormShell({
+  form,
+  slug,
+  password,
+  onPaymentsChange,
+}: PublicFormShellProps) {
   const startRef = useRef<number>(Date.now());
 
   const submit = trpc.public.submitResponse.useMutation({
@@ -35,8 +44,17 @@ export function PublicFormShell({ form, slug, password }: PublicFormShellProps) 
       answers: values,
       honeypot: meta?.honeypot,
       turnstileToken: meta?.turnstileToken,
+      payments: meta?.payments,
     });
   };
 
-  return <PublicForm form={form} onSubmit={handleSubmit} />;
+  return (
+    <PublicForm
+      form={form}
+      onSubmit={handleSubmit}
+      slug={slug}
+      password={password}
+      onPaymentsChange={onPaymentsChange}
+    />
+  );
 }

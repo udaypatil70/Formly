@@ -19,6 +19,7 @@ export const FieldType = z.enum([
   "time",
   "scale",
   "file_upload",
+  "payment",
 ]);
 export type FieldType = z.infer<typeof FieldType>;
 
@@ -35,6 +36,17 @@ export const ValidationRulesSchema = z
     allowedTypes: z.array(z.string().max(50)).max(20).optional(),
     minLabel: z.string().max(100).optional(),
     maxLabel: z.string().max(100).optional(),
+    amount: z
+      .number()
+      .int()
+      .positive()
+      .describe("Payment amount in whole rupees")
+      .optional(),
+    currency: z
+      .string()
+      .length(3)
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
   })
   .optional();
 export type ValidationRules = z.infer<typeof ValidationRulesSchema>;
@@ -248,12 +260,22 @@ export const FileAnswerValueSchema = z.object({
 });
 export type FileAnswerValue = z.infer<typeof FileAnswerValueSchema>;
 
+export const PaymentAnswerValueSchema = z.object({
+  paymentId: z.string().min(1),
+  orderId: z.string().min(1),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+  status: z.enum(["paid", "refunded"]),
+});
+export type PaymentAnswerValue = z.infer<typeof PaymentAnswerValueSchema>;
+
 export const AnswerValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.array(z.string()),
   FileAnswerValueSchema,
+  PaymentAnswerValueSchema,
 ]);
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
 
@@ -369,6 +391,16 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
         size: z.number().int().nonnegative(),
         mimeType: z.string(),
         url: z.string(),
+      });
+      break;
+
+    case "payment":
+      validator = z.object({
+        paymentId: z.string().min(1),
+        orderId: z.string().min(1),
+        amount: z.number().int().positive(),
+        currency: z.string().length(3),
+        status: z.enum(["paid", "refunded"]),
       });
       break;
 
