@@ -8,6 +8,7 @@ import { ThemeToggle } from "~/components/ui/theme-toggle";
 
 const NAV_ITEMS = [
   { label: "Features", href: "/#features" },
+  { label: "Templates", href: "/templates" },
   { label: "Explore", href: "/explore" },
   { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },

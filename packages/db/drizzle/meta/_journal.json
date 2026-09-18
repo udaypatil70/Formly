@@ -71,6 +71,13 @@
       "when": 1789698970083,
       "tag": "0009_luxuriant_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789700869191,
+      "tag": "0010_sparkling_lester",
+      "breakpoints": true
     }
   ]
 }

@@ -112,6 +112,7 @@ export function FieldInspectorContent({
           />
         ) : (
           <FormSettings
+            fields={fields}
             meta={meta}
             theme={theme}
             themes={themeList}
@@ -546,6 +547,7 @@ function FormSettings({
   meta,
   theme,
   themes,
+  fields,
   onUpdateMeta,
   onSettingsChange,
   onThemeChange,
@@ -553,6 +555,7 @@ function FormSettings({
   meta: FormBuilderMeta;
   theme: BuilderTheme | null;
   themes: BuilderTheme[];
+  fields: { id: string; label: string; type: FieldType }[];
   onUpdateMeta: (patch: Partial<FormBuilderMeta>) => void;
   onSettingsChange: (patch: Partial<BuilderFormSettings>) => void;
   onThemeChange: (t: BuilderTheme | null) => void;
@@ -561,6 +564,7 @@ function FormSettings({
   const [passwordDraft, setPasswordDraft] = useState("");
   const [slugDraft, setSlugDraft] = useState(meta.slug);
   const hasPassword = Boolean(settings.password);
+  const emailFields = fields.filter((f) => f.type === "email");
 
   useEffect(() => {
     setSlugDraft(meta.slug);
@@ -634,6 +638,95 @@ function FormSettings({
             onSettingsChange({ thankYouMessage: e.target.value })
           }
         />
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Email notifications</p>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="form-notify">Email me on responses</Label>
+            <p className="text-xs text-muted-foreground">
+              Send a notification each time someone submits.
+            </p>
+          </div>
+          <Switch
+            id="form-notify"
+            checked={settings.notifyOnResponse !== false}
+            onCheckedChange={(checked) =>
+              onSettingsChange({ notifyOnResponse: checked })
+            }
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="form-notify-email">Notification email</Label>
+          <Input
+            id="form-notify-email"
+            type="email"
+            placeholder="you@example.com"
+            value={settings.notificationEmail ?? ""}
+            onChange={(e) =>
+              onSettingsChange({ notificationEmail: e.target.value })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave blank to use the email address of your account.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="form-confirm">Send confirmation emails</Label>
+            <p className="text-xs text-muted-foreground">
+              Email respondents a copy of their answers.
+            </p>
+          </div>
+          <Switch
+            id="form-confirm"
+            checked={settings.sendConfirmation === true}
+            onCheckedChange={(checked) =>
+              onSettingsChange({ sendConfirmation: checked })
+            }
+          />
+        </div>
+
+        {settings.sendConfirmation ? (
+          emailFields.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="form-confirm-field">Email field to use</Label>
+              <Select
+                value={settings.confirmationEmailFieldId ?? "__none__"}
+                onValueChange={(value) =>
+                  onSettingsChange({
+                    confirmationEmailFieldId: value === "__none__" ? null : value,
+                  })
+                }
+              >
+                <SelectTrigger id="form-confirm-field" className="w-full">
+                  <SelectValue placeholder="Select an email field" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    <span className="text-muted-foreground">No email field</span>
+                  </SelectItem>
+                  {emailFields.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Add an Email field to your form to choose where confirmations are
+              sent.
+            </p>
+          )
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-3">

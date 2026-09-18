@@ -31,6 +31,10 @@ export interface BuilderFormSettings {
   responseLimit?: number | null;
   thankYouMessage?: string;
   stepMode?: "page" | "question";
+  notifyOnResponse?: boolean;
+  notificationEmail?: string;
+  sendConfirmation?: boolean;
+  confirmationEmailFieldId?: string | null;
 }
 
 export interface ThemeColorSet {

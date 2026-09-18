@@ -23,6 +23,9 @@ const DocsPage = lazy(() =>
 const ExplorePage = lazy(() =>
   import("~/pages/explore-page").then((m) => ({ default: m.ExplorePage })),
 );
+const TemplatesPage = lazy(() =>
+  import("~/pages/templates-page").then((m) => ({ default: m.TemplatesPage })),
+);
 const PublicFormPage = lazy(() =>
   import("~/pages/public-form-page").then((m) => ({
     default: m.PublicFormPage,
@@ -69,6 +72,7 @@ export function App() {
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/docs" element={<DocsPage />} />
         <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/f/:slug" element={<PublicFormPage />} />
         <Route path="/form/:slug" element={<PublicFormPage />} />

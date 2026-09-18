@@ -172,6 +172,23 @@ export function CreateFormPage() {
             </form>
           </CardContent>
         </Card>
+
+        <div className="border-border/60 mt-5 flex items-center justify-between gap-3 rounded-xl border p-4">
+          <div className="text-sm">
+            <p className="font-medium">Prefer a starting point?</p>
+            <p className="text-muted-foreground">
+              Choose from ready-made templates and customize in minutes.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/templates")}
+            className="shrink-0"
+          >
+            Browse templates
+          </Button>
+        </div>
       </div>
     </div>
   );

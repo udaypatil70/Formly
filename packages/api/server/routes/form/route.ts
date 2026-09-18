@@ -35,6 +35,8 @@ type DB =
     ? T
     : never;
 
+export type { DB };
+
 /** Create input: slug is optional (auto-generated from title). */
 const createFormInput = CreateFormInput.extend({
   slug: CreateFormInput.shape.slug.optional(),
