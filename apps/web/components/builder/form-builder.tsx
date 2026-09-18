@@ -20,6 +20,7 @@ import {
   Redo2Icon,
   SaveIcon,
   Settings2Icon,
+  Share2Icon,
   SquareIcon,
   Undo2Icon,
 } from "lucide-react";
@@ -51,6 +52,7 @@ import { FieldCanvas } from "./field-canvas";
 import { FieldPalette, FieldPaletteContent } from "./field-palette";
 import { FieldInspector, FieldInspectorContent } from "./field-inspector";
 import { PreviewDialog } from "./preview-dialog";
+import { ShareDialog } from "~/components/share/share-dialog";
 import { toUpdateInput, buildPublicForm } from "./utils";
 import { VersionHistoryDialog } from "./version-history-dialog";
 
@@ -92,6 +94,7 @@ export function FormBuilder({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -392,6 +395,7 @@ export function FormBuilder({
       }));
       await utils.form.getAllMine.invalidate();
       await utils.form.getById.invalidate({ id: formId });
+      if (published) setShareOpen(true);
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "Failed to update publish status",
@@ -527,6 +531,14 @@ export function FormBuilder({
             </Button>
           )}
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShareOpen(true)}
+            aria-label="Share form"
+          >
+            <Share2Icon /> Share
+          </Button>
+          <Button
             variant="ghost"
             size="icon-sm"
             onClick={() => setHistoryOpen(true)}
@@ -660,6 +672,12 @@ export function FormBuilder({
           </div>
         </SheetContent>
       </Sheet>
+
+      <ShareDialog
+        form={{ id: formId, title: meta.title, slug: meta.slug }}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
 
       <PreviewDialog
         open={previewOpen}
