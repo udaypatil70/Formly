@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db, eq, and, desc, count, ilike } from "@repo/db";
 import {
@@ -8,6 +8,7 @@ import {
   themesTable,
   formViewsTable,
   formPaymentsTable,
+  formDraftsTable,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import {
@@ -21,6 +22,7 @@ import {
   toValidatorField,
   getTheme,
   getFormBy,
+  normalizeDomain,
 } from "../../utils/form";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import { fieldOutput, themeOutput } from "../../utils/schemas";
@@ -47,6 +49,7 @@ const publicFormViewOutput = z.object({
   description: z.string().nullable().optional(),
   slug: z.string(),
   visibility: z.enum(["public", "unlisted"]),
+  customDomain: z.string().nullable().optional(),
   settings: z
     .object({
       expiry: z.string().nullable().optional(),
@@ -81,6 +84,25 @@ const publicFormViewOutput = z.object({
 
 const getBySlugInput = z.object({
   slug: z.string().min(1).max(255),
+  password: z.string().optional(),
+});
+
+const saveDraftInput = z.object({
+  slug: z.string().min(1).max(255),
+  password: z.string().optional(),
+  /** Existing resume token to keep the same draft (undefined = new draft). */
+  token: z.string().min(16).max(128).optional(),
+  answers: z.record(z.string(), z.unknown()),
+  currentStep: z.number().int().nonnegative().optional(),
+});
+
+const getDraftInput = z.object({
+  slug: z.string().min(1).max(255),
+  token: z.string().min(16).max(128),
+});
+
+const resolveDomainInput = z.object({
+  domain: z.string().min(1).max(255),
   password: z.string().optional(),
 });
 
@@ -151,6 +173,77 @@ function passwordState(form: SelectForm, password?: string) {
   return { locked: false };
 }
 
+type PublicFormView = z.infer<typeof publicFormViewOutput>;
+
+/**
+ * Builds the shared public renderer payload for a published form.
+ * Handles blocked / password-locked states the same way for slug, domain and
+ * draft-based lookups so every entry point returns a consistent shape.
+ */
+async function buildPublicFormView(
+  form: SelectForm,
+  password?: string,
+): Promise<PublicFormView> {
+  const settings = form.settings ?? {};
+  const safeSettings = {
+    ...settings,
+    password: undefined,
+    notificationEmail: undefined,
+  };
+  const theme = await getTheme(form.themeId);
+
+  const base = {
+    id: form.id,
+    title: form.title,
+    description: form.description,
+    slug: form.slug,
+    visibility: form.visibility,
+    customDomain: form.customDomain,
+    settings: safeSettings,
+  };
+
+  const blocked = await blockedState(form);
+  if (blocked) {
+    return {
+      ...base,
+      requiresPassword: false,
+      locked: false,
+      incorrectPassword: false,
+      blocked,
+      fields: [],
+      theme: null,
+    };
+  }
+
+  const auth = passwordState(form, password);
+  if (auth.locked) {
+    return {
+      ...base,
+      requiresPassword: true,
+      locked: true,
+      incorrectPassword: !!auth.incorrect,
+      blocked: null,
+      fields: [],
+      theme: serializeTheme(theme),
+    };
+  }
+
+  const fields = await getFieldsForForm(form.id);
+  return {
+    ...base,
+    requiresPassword: false,
+    locked: false,
+    incorrectPassword: false,
+    blocked: null,
+    fields: fields.fields.map((field) =>
+      toValidatorField(field, fields.optionsByField.get(field.id)),
+    ),
+    theme: serializeTheme(theme),
+  };
+}
+
+const DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export const publicRouter = router({
   /** Fetch a published form by slug for the public renderer. */
   getFormBySlug: publicProcedure
@@ -173,47 +266,11 @@ export const publicRouter = router({
       }
 
       const form = await loadPublishedForm(input.slug);
-      const settings = form.settings ?? {};
-      const { password: _password, notificationEmail: _notificationEmail, ...safeSettings } = settings;
-      const theme = await getTheme(form.themeId);
+      const view = await buildPublicFormView(form, input.password);
 
-      const blocked = await blockedState(form);
-      if (blocked) {
-        return {
-          id: form.id,
-          title: form.title,
-          description: form.description,
-          slug: form.slug,
-          visibility: form.visibility,
-          settings: safeSettings,
-          requiresPassword: false,
-          locked: false,
-          incorrectPassword: false,
-          blocked,
-          fields: [],
-          theme: null,
-        };
+      if (view.locked || view.blocked) {
+        return view;
       }
-
-      const auth = passwordState(form, input.password);
-      if (auth.locked) {
-        return {
-          id: form.id,
-          title: form.title,
-          description: form.description,
-          slug: form.slug,
-          visibility: form.visibility,
-          settings: safeSettings,
-          requiresPassword: true,
-          locked: true,
-          incorrectPassword: !!auth.incorrect,
-          blocked: null,
-          fields: [],
-          theme: serializeTheme(theme),
-        };
-      }
-
-      const fields = await getFieldsForForm(form.id);
 
       const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
       await db
@@ -221,21 +278,163 @@ export const publicRouter = router({
         .values({ formId: form.id, device, browser })
         .execute();
 
+      return view;
+    }),
+
+  /**
+   * Resolve a form by its custom domain (served on the frontend vhost).
+   * Returns the exact same payload as getFormBySlug so the public renderer is
+   * agnostic to how the form was reached.
+   */
+  resolveDomain: publicProcedure
+    .input(resolveDomainInput)
+    .output(publicFormViewOutput)
+    .query(async ({ input }) => {
+      const domain = normalizeDomain(input.domain);
+      const form = await getFormBy(
+        and(
+          eq(formsTable.customDomain, domain),
+          eq(formsTable.status, "published"),
+          eq(formsTable.archived, false),
+        )!,
+      );
+      return buildPublicFormView(form, input.password);
+    }),
+
+  /** Save a visitor's in-progress answers so they can resume later. */
+  saveDraft: publicProcedure
+    .input(saveDraftInput)
+    .output(
+      z.object({
+        token: z.string(),
+        resumeUrl: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`draft:${hashIp(ipKey)}`, {
+        limit: 20,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
+      const form = await loadPublishedForm(input.slug);
+      const settings = form.settings ?? {};
+
+      if (settings.expiry) {
+        const expiry = new Date(settings.expiry);
+        if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form has expired",
+          });
+        }
+      }
+
+      if (settings.password) {
+        if (input.password == null || input.password === "") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form is password protected",
+          });
+        }
+        if (!verifyPassword(input.password, settings.password)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Incorrect password",
+          });
+        }
+      }
+
+      const expiresAt = new Date(Date.now() + DRAFT_TTL_MS);
+
+      const existing = input.token
+        ? await db
+            .select({ id: formDraftsTable.id })
+            .from(formDraftsTable)
+            .where(
+              and(
+                eq(formDraftsTable.formId, form.id),
+                eq(formDraftsTable.resumeToken, input.token),
+              ),
+            )
+            .limit(1)
+            .execute()
+        : [];
+
+      let token: string;
+
+      if (existing.length > 0) {
+        token = input.token!;
+        await db
+          .update(formDraftsTable)
+          .set({
+            answers: input.answers,
+            currentStep: input.currentStep ?? 0,
+            expiresAt,
+          })
+          .where(eq(formDraftsTable.id, existing[0]!.id))
+          .execute();
+      } else {
+        token = randomBytes(32).toString("hex");
+        await db
+          .insert(formDraftsTable)
+          .values({
+            formId: form.id,
+            resumeToken: token,
+            answers: input.answers,
+            currentStep: input.currentStep ?? 0,
+            expiresAt,
+          })
+          .execute();
+      }
+
+      return { token, resumeUrl: `/form/${form.slug}?draft=${token}` };
+    }),
+
+  /** Load a previously saved draft by its secret resume token. */
+  getDraft: publicProcedure
+    .input(getDraftInput)
+    .output(
+      z.object({
+        answers: z.record(z.string(), z.unknown()),
+        currentStep: z.number(),
+        expiresAt: z.string(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const form = await loadPublishedForm(input.slug);
+      const rows = await db
+        .select()
+        .from(formDraftsTable)
+        .where(
+          and(
+            eq(formDraftsTable.formId, form.id),
+            eq(formDraftsTable.resumeToken, input.token),
+          ),
+        )
+        .limit(1)
+        .execute();
+
+      const draft = rows[0];
+      if (!draft) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Draft not found" });
+      }
+      if (draft.expiresAt.getTime() < Date.now()) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This draft has expired",
+        });
+      }
       return {
-        id: form.id,
-        title: form.title,
-        description: form.description,
-        slug: form.slug,
-        visibility: form.visibility,
-        settings: safeSettings,
-        requiresPassword: false,
-        locked: false,
-        incorrectPassword: false,
-        blocked: null,
-        fields: fields.fields.map((field) =>
-          toValidatorField(field, fields.optionsByField.get(field.id)),
-        ),
-        theme: serializeTheme(theme),
+        answers: draft.answers ?? {},
+        currentStep: draft.currentStep ?? 0,
+        expiresAt: draft.expiresAt.toISOString(),
       };
     }),
 

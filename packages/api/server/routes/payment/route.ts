@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { db, eq, and } from "@repo/db";
-import { formsTable, formPaymentsTable } from "@repo/db/schema";
+import { db, eq, and, desc } from "@repo/db";
+import {
+  fieldsTable,
+  formsTable,
+  formPaymentsTable,
+} from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 
-import { router, publicProcedure } from "../../trpc";
+import { router, publicProcedure, protectedProcedure } from "../../trpc";
 import { rateLimit } from "../../utils/rate-limit";
 import { verifyPassword } from "../../utils/password";
 import {
@@ -13,6 +17,7 @@ import {
   razorpayConfigured,
 } from "../../utils/razorpay";
 import { getFieldsForForm } from "../../utils/form";
+import { assertFormOwner } from "../form/route";
 import type { SelectForm } from "@repo/db/schema";
 
 const TAGS = ["Payments"];
@@ -146,6 +151,103 @@ export const paymentRouter = router({
         amount,
         currency: order.currency,
         keyId: config.keyId,
+      };
+    }),
+
+  /** Payment ledger for a form (owner only): every order + live totals. */
+  list: protectedProcedure
+    .meta({ openapi: { method: "GET", path: "/payments", tags: TAGS } })
+    .input(z.object({ formId: z.string().uuid() }))
+    .output(
+      z.object({
+        payments: z.array(
+          z.object({
+            id: z.string().uuid(),
+            status: z.enum(["created", "paid", "failed", "refunded"]),
+            amountPaise: z.number(),
+            currency: z.string(),
+            fieldLabel: z.string().nullable(),
+            orderId: z.string(),
+            paymentId: z.string().nullable(),
+            responseId: z.string().uuid().nullable().optional(),
+            createdAt: z.string(),
+            paidAt: z.string().nullable().optional(),
+          }),
+        ),
+        totals: z.object({
+          count: z.number(),
+          paidCount: z.number(),
+          pendingCount: z.number(),
+          refundedCount: z.number(),
+          failedCount: z.number(),
+          paidAmountPaise: z.number(),
+          pendingAmountPaise: z.number(),
+          refundedAmountPaise: z.number(),
+        }),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertFormOwner(input.formId, ctx.user.id);
+
+      const rows = await db
+        .select({
+          payment: formPaymentsTable,
+          fieldLabel: fieldsTable.label,
+        })
+        .from(formPaymentsTable)
+        .innerJoin(fieldsTable, eq(fieldsTable.id, formPaymentsTable.fieldId))
+        .where(eq(formPaymentsTable.formId, input.formId))
+        .orderBy(desc(formPaymentsTable.createdAt))
+        .limit(500)
+        .execute();
+
+      const totals = {
+        count: 0,
+        paidCount: 0,
+        pendingCount: 0,
+        refundedCount: 0,
+        failedCount: 0,
+        paidAmountPaise: 0,
+        pendingAmountPaise: 0,
+        refundedAmountPaise: 0,
+      };
+
+      for (const { payment } of rows) {
+        totals.count += 1;
+        switch (payment.status) {
+          case "paid":
+            totals.paidCount += 1;
+            totals.paidAmountPaise += payment.amountPaise;
+            break;
+          case "refunded":
+            totals.refundedCount += 1;
+            totals.refundedAmountPaise += payment.amountPaise;
+            break;
+          case "failed":
+            totals.failedCount += 1;
+            break;
+          case "created":
+          default:
+            totals.pendingCount += 1;
+            totals.pendingAmountPaise += payment.amountPaise;
+            break;
+        }
+      }
+
+      return {
+        payments: rows.map(({ payment, fieldLabel }) => ({
+          id: payment.id,
+          status: payment.status,
+          amountPaise: payment.amountPaise,
+          currency: payment.currency,
+          fieldLabel,
+          orderId: payment.razorpayOrderId,
+          paymentId: payment.razorpayPaymentId,
+          responseId: payment.responseId ?? null,
+          createdAt: payment.createdAt.toISOString(),
+          paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+        })),
+        totals,
       };
     }),
 });

@@ -13,6 +13,11 @@ interface PublicFormShellProps {
   onPaymentsChange?: (payments: PaidPayment[]) => void;
   previewMode?: boolean;
   formTitle?: string;
+  initialValues?: Record<string, unknown>;
+  initialStep?: number;
+  draftToken?: string;
+  onDraftToken?: (token: string) => void;
+  showSaveDraft?: boolean;
 }
 
 export function PublicFormShell({
@@ -20,6 +25,11 @@ export function PublicFormShell({
   slug,
   password,
   onPaymentsChange,
+  initialValues,
+  initialStep,
+  draftToken,
+  onDraftToken,
+  showSaveDraft = false,
 }: PublicFormShellProps) {
   const startRef = useRef<number>(Date.now());
 
@@ -55,6 +65,11 @@ export function PublicFormShell({
       slug={slug}
       password={password}
       onPaymentsChange={onPaymentsChange}
+      initialValues={initialValues}
+      initialStep={initialStep}
+      draftToken={draftToken}
+      onDraftToken={onDraftToken}
+      showSaveDraft={showSaveDraft}
     />
   );
 }

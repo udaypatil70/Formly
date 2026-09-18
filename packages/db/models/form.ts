@@ -76,6 +76,8 @@ export const formsTable = pgTable(
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
     slug: varchar("slug", { length: 255 }).notNull().unique(),
+    /** Apex/vhost served by the frontend that resolves straight to this form. */
+    customDomain: varchar("custom_domain", { length: 255 }).unique(),
     status: formStatusEnum("status").default("draft").notNull(),
     visibility: formVisibilityEnum("visibility").default("public").notNull(),
     archived: boolean("archived").default(false).notNull(),
@@ -117,6 +119,31 @@ export const formsTable = pgTable(
     index("forms_owner_id_idx").on(table.ownerId),
     index("forms_status_idx").on(table.status),
     index("forms_slug_idx").on(table.slug),
+  ],
+);
+
+// ─── Save & Continue Drafts ──────────────────────────────
+// Lets visitors pause mid-form and resume later via a secret resume token
+// embedded in a shareable link (?draft=<token>). Answers are stored as the
+// raw client-side values and re-played into the renderer on resume.
+
+export const formDraftsTable = pgTable(
+  "form_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" }),
+    resumeToken: varchar("resume_token", { length: 128 }).notNull().unique(),
+    answers: jsonb("answers").$type<Record<string, unknown>>().default({}),
+    currentStep: integer("current_step").default(0).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("form_drafts_form_id_idx").on(table.formId),
+    index("form_drafts_resume_token_idx").on(table.resumeToken),
   ],
 );
 
@@ -481,3 +508,5 @@ export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;
 export type InsertFormWebhook = typeof formWebhooksTable.$inferInsert;
 export type SelectFormFileUpload = typeof formFileUploadsTable.$inferSelect;
 export type InsertFormFileUpload = typeof formFileUploadsTable.$inferInsert;
+export type SelectFormDraft = typeof formDraftsTable.$inferSelect;
+export type InsertFormDraft = typeof formDraftsTable.$inferInsert;

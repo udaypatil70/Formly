@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import {
+  ActivityIcon,
   ArrowLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -77,7 +78,7 @@ export function ResponsesPage() {
       ...(to ? { to: `${to}T23:59:59.999` } : {}),
       ...(search.trim() ? { search: search.trim() } : {}),
     },
-    { enabled: !!formId, placeholderData: keepPreviousData },
+    { enabled: !!formId, placeholderData: keepPreviousData, refetchInterval: 10_000 },
   );
 
   const exportCsv = trpc.response.exportCsv.useQuery(
@@ -148,11 +149,20 @@ export function ResponsesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {title ?? "Responses"}
           </h1>
-          <p className="text-muted-foreground text-sm">
-            {responsesQuery.isLoading
-              ? "Loading responses\u2026"
-              : `${total} response${total === 1 ? "" : "s"}`}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-muted-foreground text-sm">
+              {responsesQuery.isLoading
+                ? "Loading responses\u2026"
+                : `${total} response${total === 1 ? "" : "s"}`}
+            </p>
+            <Badge
+              variant="outline"
+              className="gap-1.5 border-emerald-500/30 text-emerald-500"
+            >
+              <ActivityIcon className="size-3 animate-pulse" />
+              Live
+            </Badge>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

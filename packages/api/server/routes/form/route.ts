@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, eq, and, desc, count, countDistinct, max, inArray } from "@repo/db";
+import { db, eq, and, desc, count, countDistinct, max, inArray, ne } from "@repo/db";
 import {
   fieldOptionsTable,
   fieldsTable,
@@ -17,7 +17,7 @@ import {
   type Field,
 } from "@repo/validators";
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
-import { getFormBy, getTheme, getValidatorFields } from "../../utils/form";
+import { getFormBy, getTheme, getValidatorFields, normalizeDomain } from "../../utils/form";
 import { slugify, ensureUniqueSlug, isSlugAvailable } from "../../utils/slug";
 import { hashPassword } from "../../utils/password";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
@@ -289,6 +289,31 @@ export const formRouter = router({
         }
       }
 
+      let nextCustomDomain = form.customDomain;
+      if (input.customDomain !== undefined) {
+        const raw = input.customDomain?.trim() || "";
+        nextCustomDomain = raw ? normalizeDomain(raw) : null;
+        if (nextCustomDomain && nextCustomDomain !== form.customDomain) {
+          const conflict = await db
+            .select({ id: formsTable.id })
+            .from(formsTable)
+            .where(
+              and(
+                eq(formsTable.customDomain, nextCustomDomain),
+                ne(formsTable.id, input.id),
+              ),
+            )
+            .limit(1)
+            .execute();
+          if (conflict.length > 0) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Custom domain already in use",
+            });
+          }
+        }
+      }
+
       const baseSettings = input.settings ?? form.settings;
       const nextSettings = { ...(baseSettings ?? {}) };
       if (nextSettings.password) {
@@ -304,6 +329,7 @@ export const formRouter = router({
           slug: input.slug ?? form.slug,
           visibility: input.visibility ?? form.visibility,
           themeId: input.themeId !== undefined ? input.themeId : form.themeId,
+          customDomain: nextCustomDomain,
           settings: nextSettings,
         })
         .where(eq(formsTable.id, input.id))

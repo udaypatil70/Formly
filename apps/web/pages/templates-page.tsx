@@ -50,6 +50,7 @@ const CATEGORIES = [
   { value: "product", label: "Product" },
   { value: "careers", label: "Careers" },
   { value: "community", label: "Community" },
+  { value: "it", label: "IT" },
 ] as const;
 
 type CategoryValue = (typeof CATEGORIES)[number]["value"];

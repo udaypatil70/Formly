@@ -211,6 +211,8 @@ function FieldSettings({
         />
       </div>
 
+      <AnswerPipeEditor field={field} fields={fields} onUpdate={onUpdate} />
+
       <div className="flex flex-col gap-2">
         <Label>Type</Label>
         <Select
@@ -308,6 +310,79 @@ function FieldSettings({
         <Trash2Icon /> Delete field
       </Button>
     </>
+  );
+}
+
+function AnswerPipeEditor({
+  field,
+  fields,
+  onUpdate,
+}: {
+  field: BuilderField;
+  fields: { id: string; label: string; type: FieldType }[];
+  onUpdate: (id: string, patch: Partial<BuilderField>) => void;
+}) {
+  const selfIndex = fields.findIndex((f) => f.id === field.id);
+  const earlier = fields
+    .filter((f) => f.id !== field.id && f.type !== "payment")
+    .slice(0, selfIndex < 0 ? undefined : selfIndex);
+
+  const [sourceId, setSourceId] = useState(earlier[0]?.id ?? "");
+  const [target, setTarget] = useState<"label" | "placeholder" | "helpText">(
+    "label",
+  );
+
+  if (earlier.length === 0) return null;
+
+  const insert = () => {
+    const source = earlier.find((f) => f.id === sourceId) ?? earlier[earlier.length - 1];
+    if (!source) return;
+    const token = `{{${source.id}}}`;
+    const current =
+      target === "label"
+        ? field.label
+        : target === "placeholder"
+          ? field.placeholder ?? ""
+          : field.helpText ?? "";
+    const next = current.trim() ? `${current.trim()} ${token}` : token;
+    onUpdate(field.id, { [target]: next } as Partial<BuilderField>);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-3">
+      <p className="text-sm font-medium">Insert previous answer</p>
+      <div className="flex items-center gap-1.5">
+        <Select value={target} onValueChange={(v) => setTarget(v as typeof target)}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="label">Label</SelectItem>
+            <SelectItem value="placeholder">Placeholder</SelectItem>
+            <SelectItem value="helpText">Help text</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sourceId} onValueChange={setSourceId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Source field" />
+          </SelectTrigger>
+          <SelectContent>
+            {earlier.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.label || "Untitled field"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={insert}>
+        <PlusIcon /> Insert answer
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Fills in the answer from an earlier question when the form is shown.
+        Only questions above this one can be referenced.
+      </p>
+    </div>
   );
 }
 
@@ -1207,6 +1282,23 @@ function FormSettings({
         <p className="text-xs text-muted-foreground">
           Lowercase letters, numbers and hyphens. Changing it breaks any old
           shared links.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-custom-domain">Custom domain</Label>
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground shrink-0 text-sm">https://</span>
+          <Input
+            id="form-custom-domain"
+            placeholder="forms.yourbrand.com"
+            value={meta.customDomain ?? ""}
+            onChange={(e) => onUpdateMeta({ customDomain: e.target.value })}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Point a subdomain or apex at the app and it will open this form
+          directly at the root with no /form/ path. Clear it to remove.
         </p>
       </div>
 

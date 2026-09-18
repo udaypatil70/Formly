@@ -89,6 +89,7 @@ export const formMetaOutput = z.object({
   visibility: z.enum(["public", "unlisted"]),
   archived: z.boolean(),
   themeId: z.string().uuid().nullable().optional(),
+  customDomain: z.string().nullable().optional(),
   settings: z
     .object({
       password: z.string().optional(),

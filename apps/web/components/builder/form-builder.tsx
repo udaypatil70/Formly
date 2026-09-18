@@ -64,6 +64,7 @@ export interface FormBuilderMeta {
   status: string;
   visibility: string;
   themeId?: string | null;
+  customDomain?: string | null;
   settings?: BuilderFormSettings;
 }
 
@@ -674,7 +675,12 @@ export function FormBuilder({
       </Sheet>
 
       <ShareDialog
-        form={{ id: formId, title: meta.title, slug: meta.slug }}
+        form={{
+          id: formId,
+          title: meta.title,
+          slug: meta.slug,
+          customDomain: meta.customDomain ?? null,
+        }}
         open={shareOpen}
         onOpenChange={setShareOpen}
       />

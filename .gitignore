@@ -42,3 +42,6 @@ yarn-error.log*
 *.pid
 *-pid.txt
 test-env.log
+
+# User-uploaded files
+apps/server/uploads/

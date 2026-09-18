@@ -207,6 +207,12 @@ export const CreateFormInput = z.object({
     ),
   visibility: z.enum(["public", "unlisted"]).default("public"),
   themeId: z.string().uuid().optional(),
+  customDomain: z
+    .string()
+    .trim()
+    .max(255)
+    .nullable()
+    .optional(),
   settings: z
     .object({
       password: z.string().min(1).optional(),

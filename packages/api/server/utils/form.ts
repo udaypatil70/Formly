@@ -102,6 +102,17 @@ export async function getTheme(themeId: string | null): Promise<SelectTheme | nu
   return themes[0] ?? null;
 }
 
+/** Normalise a user-supplied domain string to a canonical lowercase host. */
+export function normalizeDomain(input: string): string {
+  let d = input.trim().toLowerCase();
+  d = d.replace(/^https?:\/\//, "");
+  d = d.split("/")[0]!;
+  d = d.split("?")[0]!;
+  d = d.replace(/:\d+$/, "");
+  d = d.replace(/^www\./, "");
+  return d;
+}
+
 /**
  * Loads a form with its validator fields + theme in one shot.
  * Used by the public renderer and the builder editor.

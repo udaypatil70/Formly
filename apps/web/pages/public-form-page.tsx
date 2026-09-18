@@ -14,14 +14,25 @@ export function PublicFormPage() {
   const [searchParams] = useSearchParams();
   const passwordParam = searchParams.get("password") ?? undefined;
   const isEmbed = searchParams.get("embed") === "1";
+  const draftParam = searchParams.get("draft") ?? undefined;
 
   const [password, setPassword] = useState<string | undefined>(passwordParam);
   const [passwordDraft, setPasswordDraft] = useState("");
 
-  const data = trpc.public.getFormBySlug.useQuery(
+  const hasSlug = !!slug;
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname : "";
+  const usesCustomDomain = !hasSlug && !!hostname;
+
+  const slugQuery = trpc.public.getFormBySlug.useQuery(
     { slug: slug ?? "", password },
-    { enabled: !!slug },
+    { enabled: hasSlug },
   );
+  const domainQuery = trpc.public.resolveDomain.useQuery(
+    { domain: hostname, password },
+    { enabled: usesCustomDomain },
+  );
+  const data = hasSlug ? slugQuery : domainQuery;
 
   // Auto-resize the parent iframe when the form is embedded.
   useEffect(() => {
@@ -38,7 +49,7 @@ export function PublicFormPage() {
     return () => observer.disconnect();
   }, [isEmbed]);
 
-  if (!slug || data.isLoading) {
+  if ((!slug && !usesCustomDomain) || data.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner className="size-6 text-muted-foreground" />
@@ -179,8 +190,77 @@ export function PublicFormPage() {
   };
 
   return (
+    <FormStage
+      form={form}
+      slug={d.slug}
+      password={password}
+      draftParam={draftParam}
+      isEmbed={isEmbed}
+    />
+  );
+}
+
+function FormStage({
+  form,
+  slug,
+  password,
+  draftParam,
+  isEmbed,
+}: {
+  form: PublicFormData;
+  slug: string;
+  password?: string;
+  draftParam?: string;
+  isEmbed: boolean;
+}) {
+  const draftQuery = trpc.public.getDraft.useQuery(
+    { slug, token: draftParam ?? "" },
+    { enabled: !!draftParam },
+  );
+
+  useEffect(() => {
+    if (draftParam && draftQuery.isError) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("draft");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [draftParam, draftQuery.isError]);
+
+  const updateDraftParam = (token: string) => {
+    if (!token) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("draft") === token) return;
+    url.searchParams.set("draft", token);
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  if (!!draftParam && draftQuery.isLoading) {
+    return (
+      <main className="min-h-screen">
+        <div className="flex min-h-screen items-center justify-center">
+          <Spinner className="size-6 text-muted-foreground" />
+        </div>
+      </main>
+    );
+  }
+
+  return (
     <main className="min-h-screen">
-      <PublicFormShell form={form} slug={d.slug} password={password} />
+      <PublicFormShell
+        key={draftParam ?? "live"}
+        form={form}
+        slug={slug}
+        password={password}
+        initialValues={
+          draftQuery.isSuccess
+            ? (draftQuery.data.answers as Record<string, unknown>)
+            : undefined
+        }
+        initialStep={draftQuery.isSuccess ? draftQuery.data.currentStep : 0}
+        draftToken={draftParam}
+        onDraftToken={updateDraftParam}
+        showSaveDraft={!isEmbed}
+      />
     </main>
   );
 }

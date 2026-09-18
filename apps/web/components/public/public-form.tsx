@@ -57,6 +57,16 @@ interface PublicFormProps {
   previewMode?: boolean;
   /** Reports payment answers as they complete so a parent can collect them. */
   onPaymentsChange?: (payments: PaidPayment[]) => void;
+  /** Pre-filled answers restored from a saved draft (remounts via key). */
+  initialValues?: Record<string, unknown>;
+  /** Step to restore when resuming a saved draft. */
+  initialStep?: number;
+  /** Active resume token for the draft being edited, if any. */
+  draftToken?: string;
+  /** Notifies the parent when a new resume token is created so it can update the URL. */
+  onDraftToken?: (token: string) => void;
+  /** Renders the "Save & continue later" control (hidden in previews). */
+  showSaveDraft?: boolean;
 }
 
 const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
@@ -154,6 +164,61 @@ function fieldIsVisible(field: PublicField, values: Record<string, unknown>): bo
     const results = group.conditions.map((c) => evalRuleRef(c, values));
     return group.all ? results.every(Boolean) : results.some(Boolean);
   });
+}
+
+// ─── Answer piping ({{fieldId}} tokens) ────────────────────
+
+const PIPE_TOKEN_RE =
+  /\{\{\s*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\s*\}\}/g;
+
+/** Renders an answer value as human-readable text for piping into labels. */
+function pipeDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.amount === "number" && typeof obj.currency === "string") {
+      return `${obj.currency} ${obj.amount}`;
+    }
+    if (typeof obj.name === "string") return obj.name;
+    return "";
+  }
+  return String(value);
+}
+
+/** Replaces {{fieldId}} tokens whose source fields are allowed. */
+function applyPipe(
+  text: string,
+  values: Record<string, unknown>,
+  isAllowed: (fieldId: string) => boolean,
+): string {
+  return text.replace(PIPE_TOKEN_RE, (raw, fieldId: string) =>
+    isAllowed(fieldId) ? pipeDisplayValue(values[fieldId]) : raw,
+  );
+}
+
+/**
+ * Resolves piping tokens in a field's label / placeholder / help text using
+ * answers already collected, but only from fields that come *before* it.
+ */
+function resolvePipedField(
+  field: PublicField,
+  getIndex: (fieldId: string) => number | undefined,
+  values: Record<string, unknown>,
+): PublicField {
+  const index = getIndex(field.id);
+  const isAllowed = (targetId: string) =>
+    index !== undefined && (getIndex(targetId) ?? -1) < index;
+  return {
+    ...field,
+    label: applyPipe(field.label, values, isAllowed),
+    placeholder: field.placeholder
+      ? applyPipe(field.placeholder, values, isAllowed)
+      : field.placeholder,
+    helpText: field.helpText
+      ? applyPipe(field.helpText, values, isAllowed)
+      : field.helpText,
+  };
 }
 
 function FieldInput({
@@ -699,16 +764,28 @@ export function PublicForm({
   password,
   previewMode = false,
   onPaymentsChange,
+  initialValues,
+  initialStep,
+  draftToken,
+  onDraftToken,
+  showSaveDraft = false,
 }: PublicFormProps) {
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [values, setValues] = useState<Record<string, unknown>>(
+    initialValues ?? {},
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(initialStep ?? 0);
   const [started, setStarted] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const paymentsRef = useRef<PaidPayment[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftLink, setDraftLink] = useState<string | null>(null);
+  const [draftCopied, setDraftCopied] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const saveDraft = trpc.public.saveDraft.useMutation();
 
   const stepMode = form.settings?.stepMode ?? "all";
   const startScreen = form.settings?.startScreen;
@@ -956,6 +1033,40 @@ export function PublicForm({
     }
   };
 
+  const handleSaveDraft = async () => {
+    if (!slug) return;
+    setDraftError(null);
+    setSavingDraft(true);
+    try {
+      const res = await saveDraft.mutateAsync({
+        slug,
+        password,
+        answers: values,
+        currentStep: safeStep,
+        token: draftToken ?? undefined,
+      });
+      onDraftToken?.(res.token);
+      setDraftLink(`${window.location.origin}${res.resumeUrl}`);
+    } catch (err) {
+      setDraftError(
+        err instanceof Error ? err.message : "Could not save your draft",
+      );
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const copyDraftLink = async () => {
+    if (!draftLink) return;
+    try {
+      await navigator.clipboard.writeText(draftLink);
+      setDraftCopied(true);
+      window.setTimeout(() => setDraftCopied(false), 1600);
+    } catch {
+      setDraftError("Could not copy. Select the link to copy it manually.");
+    }
+  };
+
   const updateValue = (fieldId: string, value: unknown) => {
     setValues((prev) => ({ ...prev, [fieldId]: value }));
     setErrors((prev) => {
@@ -1052,7 +1163,13 @@ export function PublicForm({
               </div>
             ) : (
               <>
-                {currentFields.map((field) => (
+                {currentFields.map((f) => {
+                  const field = resolvePipedField(
+                    f,
+                    (id) => flatIndex.get(id),
+                    values,
+                  );
+                  return (
                   <div key={field.id} className="flex flex-col gap-2">
                     <div className="flex items-center gap-1">
                       <Label htmlFor={field.id}>
@@ -1087,7 +1204,8 @@ export function PublicForm({
                       <p className="text-xs text-destructive">{errors[field.id]}</p>
                     ) : null}
                   </div>
-                ))}
+                  );
+                })}
 
                 {isLastStep && TURNSTILE_SITE_KEY ? (
                   <div className={cn("flex flex-col gap-1", errors._turnstile && "opacity-90")}>
@@ -1133,6 +1251,49 @@ export function PublicForm({
                     </Button>
                   )}
                 </div>
+
+                {showSaveDraft && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        disabled={savingDraft}
+                        onClick={() => void handleSaveDraft()}
+                        className="text-xs underline-offset-4 opacity-70 transition-opacity hover:opacity-100 hover:underline"
+                      >
+                        {savingDraft ? "Saving…" : "Save & continue later"}
+                      </button>
+                    </div>
+                    {draftLink ? (
+                      <div
+                        className="rounded-md border px-3 py-2 text-xs"
+                        style={{ backgroundColor: `${surface}d9` }}
+                      >
+                        <p className="font-medium">Draft saved. Resume link:</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            readOnly
+                            value={draftLink}
+                            className="min-w-0 flex-1 bg-transparent outline-none underline"
+                            onFocus={(e) => e.target.select()}
+                          />
+                          <button
+                            type="button"
+                            onClick={copyDraftLink}
+                            className="shrink-0 underline underline-offset-2 opacity-80 hover:opacity-100"
+                          >
+                            {draftCopied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {draftError ? (
+                      <p className="text-center text-xs text-destructive">
+                        {draftError}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </>
             )}
           </form>

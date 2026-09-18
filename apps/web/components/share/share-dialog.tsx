@@ -24,7 +24,12 @@ import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cn } from "~/lib/utils";
 
-type ShareTarget = { id: string; title: string; slug: string } | null;
+type ShareTarget = {
+  id: string;
+  title: string;
+  slug: string;
+  customDomain?: string | null;
+} | null;
 
 export function ShareDialog({
   form,
@@ -41,7 +46,9 @@ export function ShareDialog({
 
   if (!form) return null;
 
-  const url = `${window.location.origin}/form/${form.slug}`;
+  const url = form.customDomain
+    ? `https://${form.customDomain}`
+    : `${window.location.origin}/form/${form.slug}`;
   const shareText = `Check out "${form.title}" on FormForge`;
   const iframeCode = `<iframe src="${url}" width="100%" height="640" style="border:0;border-radius:12px" loading="lazy" allowfullscreen></iframe>`;
   const scriptCode = `<script src="${window.location.origin}/embed.js" data-form="${form.slug}" async></script>`;
