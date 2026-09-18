@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { trpc } from "~/trpc/client";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
+import { ThemeToggle } from "~/components/ui/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +64,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Button
             size="sm"
             onClick={() => navigate("/builder")}

@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { Loader2Icon } from "lucide-react";
 
 import { trpc } from "~/trpc/client";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const session = trpc.auth.getSession.useQuery();
@@ -10,7 +10,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   if (session.isLoading) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+        <Spinner className="size-6 text-muted-foreground" />
       </div>
     );
   }

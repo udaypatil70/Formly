@@ -64,6 +64,13 @@
       "when": 1789637614659,
       "tag": "0008_rich_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789698970083,
+      "tag": "0009_luxuriant_strong_guy",
+      "breakpoints": true
     }
   ]
 }

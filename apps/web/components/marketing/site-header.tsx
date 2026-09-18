@@ -4,6 +4,7 @@ import { ClipboardPenIcon, MenuIcon, XIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
+import { ThemeToggle } from "~/components/ui/theme-toggle";
 
 const NAV_ITEMS = [
   { label: "Features", href: "/#features" },
@@ -50,6 +51,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <Button variant="ghost" asChild size="sm">
             <Link to="/login">Sign in</Link>
           </Button>
@@ -58,14 +60,17 @@ export function SiteHeader() {
           </Button>
         </div>
 
+        <div className="flex items-center gap-1 md:hidden">
+        <ThemeToggle />
         <button
           type="button"
           aria-label="Toggle navigation"
           onClick={() => setOpen((value) => !value)}
-          className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-md md:hidden"
+          className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-md"
         >
           {open ? <XIcon className="size-5" /> : <MenuIcon className="size-5" />}
         </button>
+      </div>
       </div>
 
       {open && (

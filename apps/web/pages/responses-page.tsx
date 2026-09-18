@@ -13,18 +13,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -355,30 +346,16 @@ export function ResponsesPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this response?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This response and its answers will be permanently removed. This
-              action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
-              onClick={() => void handleDelete()}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete this response?"
+        description="This response and its answers will be permanently removed. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        busy={deleteMutation.isPending}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

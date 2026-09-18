@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeftIcon, FilePlus2Icon, Loader2Icon, SparklesIcon } from "lucide-react";
+import { ArrowLeftIcon, FilePlus2Icon, SparklesIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 
 const slugify = (value: string) =>
@@ -155,7 +156,7 @@ export function CreateFormPage() {
 
               <div className="flex gap-3 pt-2">
                 <Button type="submit" size="lg" disabled={loading} className="flex-1">
-                  {loading && <Loader2Icon className="animate-spin" />}
+                  {loading && <Spinner />}
                   {loading ? "Creating…" : "Create form"}
                 </Button>
                 <Button

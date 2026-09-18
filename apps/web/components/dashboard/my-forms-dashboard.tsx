@@ -20,8 +20,8 @@ import { toast } from "sonner";
 
 import { trpc } from "~/trpc/client";
 import { ShareDialog } from "~/components/share/share-dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -338,38 +338,29 @@ export function MyFormsDashboard() {
         </div>
       )}
 
-      <AlertDialog
+      <ConfirmDialog
         open={deleteForm !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteForm(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this form?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{deleteForm?.title}&rdquo; and all of its responses will be
-              permanently removed. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
-              onClick={() => {
-                if (!deleteForm) return;
-                void run(
-                  () => deleteMutation.mutateAsync({ id: deleteForm.id }),
-                  "Form deleted",
-                ).then(() => setDeleteForm(null));
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete this form?"
+        description={
+          <>
+            &ldquo;{deleteForm?.title}&rdquo; and all of its responses will be
+            permanently removed. This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        destructive
+        busy={deleteMutation.isPending}
+        onConfirm={() => {
+          if (!deleteForm) return;
+          void run(
+            () => deleteMutation.mutateAsync({ id: deleteForm.id }),
+            "Form deleted",
+          ).then(() => setDeleteForm(null));
+        }}
+      />
     <ShareDialog
         open={shareForm !== null}
         onOpenChange={(open) => {

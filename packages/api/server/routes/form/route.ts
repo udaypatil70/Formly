@@ -1,17 +1,20 @@
 import { z } from "zod";
-import { db, eq, and, desc, count, countDistinct } from "@repo/db";
+import { db, eq, and, desc, count, countDistinct, max, inArray } from "@repo/db";
 import {
   fieldOptionsTable,
   fieldsTable,
   formsTable,
   responsesTable,
   formViewsTable,
+  formVersionsTable,
+  type FormVersionField,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import {
   CreateFormInput,
   UpdateFormInput,
   type CreateFieldInput,
+  type Field,
 } from "@repo/validators";
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
 import { getFormBy, getTheme, getValidatorFields } from "../../utils/form";
@@ -95,6 +98,24 @@ export async function assertFormOwner(formId: string, userId: string) {
     });
   }
   return form;
+}
+
+/** Snapshot shape: validator Field -> JSON form version field. */
+function toVersionField(field: Field): FormVersionField {
+  return {
+    id: field.id,
+    type: field.type,
+    label: field.label,
+    placeholder: field.placeholder ?? null,
+    helpText: field.helpText ?? null,
+    required: field.required,
+    order: field.order,
+    validationRules: field.validationRules ?? null,
+    conditionalLogic: field.conditionalLogic ?? null,
+    options:
+      field.options?.map((o) => ({ label: o.label, value: o.value, order: o.order })) ??
+      null,
+  };
 }
 
 export const formRouter = router({
@@ -429,5 +450,214 @@ export const formRouter = router({
     .query(async ({ input }) => {
       const available = await isSlugAvailable(input.slug);
       return { slug: input.slug, available };
+    }),
+
+  /** List version snapshots for a form (newest first). */
+  versionsList: protectedProcedure
+    .input(idInput)
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          version: z.number(),
+          label: z.string().nullable(),
+          title: z.string(),
+          createdAt: z.string(),
+        }),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertFormOwner(input.id, ctx.user.id);
+      const rows = await db
+        .select()
+        .from(formVersionsTable)
+        .where(eq(formVersionsTable.formId, input.id))
+        .orderBy(desc(formVersionsTable.version))
+        .execute();
+      return rows.map((row) => ({
+        id: row.id,
+        version: row.version,
+        label: row.label ?? null,
+        title: row.title,
+        createdAt: row.createdAt.toISOString(),
+      }));
+    }),
+
+  /** Fetch the full snapshot for a single version. */
+  versionsGet: protectedProcedure
+    .input(idInput)
+    .output(
+      z.object({
+        id: z.string(),
+        version: z.number(),
+        label: z.string().nullable(),
+        title: z.string(),
+        description: z.string().nullable(),
+        themeId: z.string().uuid().nullable(),
+        settings: z.record(z.string(), z.unknown()),
+        fields: z.array(z.unknown()),
+        createdAt: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await db
+        .select()
+        .from(formVersionsTable)
+        .where(eq(formVersionsTable.id, input.id))
+        .limit(1)
+        .execute();
+      const version = rows[0];
+      if (!version) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
+      }
+      await assertFormOwner(version.formId, ctx.user.id);
+      return {
+        id: version.id,
+        version: version.version,
+        label: version.label ?? null,
+        title: version.title,
+        description: version.description ?? null,
+        themeId: version.themeId ?? null,
+        settings: version.settings ?? {},
+        fields: version.fields,
+        createdAt: version.createdAt.toISOString(),
+      };
+    }),
+
+  /** Create a version snapshot of the form's current state. */
+  versionsSave: protectedProcedure
+    .input(
+      z.object({
+        formId: z.string().uuid(),
+        label: z.string().max(255).optional(),
+      }),
+    )
+    .output(
+      z.object({
+        id: z.string(),
+        version: z.number(),
+        createdAt: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const form = await assertFormOwner(input.formId, ctx.user.id);
+      const fields = await getValidatorFields(form.id);
+
+      const [maxRow] = await db
+        .select({ max: max(formVersionsTable.version) })
+        .from(formVersionsTable)
+        .where(eq(formVersionsTable.formId, form.id))
+        .execute();
+      const nextVersion = Number(maxRow?.max ?? 0) + 1;
+
+      const inserted = await db
+        .insert(formVersionsTable)
+        .values({
+          formId: form.id,
+          version: nextVersion,
+          label: input.label?.trim() || null,
+          title: form.title,
+          description: form.description,
+          themeId: form.themeId,
+          settings: form.settings ?? {},
+          fields: fields.map(toVersionField),
+        })
+        .returning()
+        .execute();
+
+      const created = inserted[0]!;
+      return {
+        id: created.id,
+        version: created.version,
+        createdAt: created.createdAt.toISOString(),
+      };
+    }),
+
+  /** Restore a form to a previous version snapshot. */
+  versionsRestore: protectedProcedure
+    .input(idInput)
+    .output(formMetaOutput)
+    .mutation(async ({ ctx, input }) => {
+      const rows = await db
+        .select()
+        .from(formVersionsTable)
+        .where(eq(formVersionsTable.id, input.id))
+        .limit(1)
+        .execute();
+      const version = rows[0];
+      if (!version) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
+      }
+      await assertFormOwner(version.formId, ctx.user.id);
+
+      return db.transaction(async (tx) => {
+        const existing = await tx
+          .select({ id: fieldsTable.id })
+          .from(fieldsTable)
+          .where(eq(fieldsTable.formId, version.formId))
+          .execute();
+        if (existing.length > 0) {
+          await tx
+            .delete(fieldOptionsTable)
+            .where(
+              inArray(
+                fieldOptionsTable.fieldId,
+                existing.map((f) => f.id),
+              ),
+            )
+            .execute();
+          await tx
+            .delete(fieldsTable)
+            .where(eq(fieldsTable.formId, version.formId))
+            .execute();
+        }
+
+        for (const field of version.fields) {
+          const inserted = await tx
+            .insert(fieldsTable)
+            .values({
+              formId: version.formId,
+              type: field.type as never,
+              label: field.label,
+              placeholder: field.placeholder,
+              helpText: field.helpText,
+              required: field.required,
+              order: field.order,
+              validationRules: field.validationRules ?? {},
+              conditionalLogic: field.conditionalLogic ?? {},
+            })
+            .returning()
+            .execute();
+          const created = inserted[0]!;
+          if (field.options && field.options.length > 0) {
+            await tx
+              .insert(fieldOptionsTable)
+              .values(
+                field.options.map((option) => ({
+                  fieldId: created.id,
+                  label: option.label,
+                  value: option.value,
+                  order: option.order,
+                })),
+              )
+              .execute();
+          }
+        }
+
+        const updated = await tx
+          .update(formsTable)
+          .set({
+            title: version.title,
+            description: version.description,
+            themeId: version.themeId,
+            settings: version.settings ?? {},
+            updatedAt: new Date(),
+          })
+          .where(eq(formsTable.id, version.formId))
+          .returning()
+          .execute();
+
+        return serializeForm(updated[0]!);
+      });
     }),
 });

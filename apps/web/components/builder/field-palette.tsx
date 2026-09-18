@@ -57,7 +57,12 @@ export const PALETTE_GROUPS: {
   },
 ];
 
-function PaletteItem({ type, label, icon: Icon }: (typeof PALETTE_ITEMS)[number]) {
+function PaletteItem({
+  type,
+  label,
+  icon: Icon,
+  onAdd,
+}: (typeof PALETTE_ITEMS)[number] & { onAdd?: (type: FieldType) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${type}`,
     data: { from: "palette", type },
@@ -67,6 +72,7 @@ function PaletteItem({ type, label, icon: Icon }: (typeof PALETTE_ITEMS)[number]
     <button
       ref={setNodeRef}
       type="button"
+      onClick={() => onAdd?.(type)}
       className={cn(
         "flex cursor-grab items-center gap-3 rounded-lg border bg-background px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent",
         isDragging && "opacity-50",
@@ -80,28 +86,38 @@ function PaletteItem({ type, label, icon: Icon }: (typeof PALETTE_ITEMS)[number]
   );
 }
 
-export function FieldPalette() {
+export function FieldPaletteContent({
+  onAdd,
+}: {
+  onAdd?: (type: FieldType) => void;
+}) {
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r md:flex">
+    <div className="flex flex-col gap-4 px-3 pb-4">
+      {PALETTE_GROUPS.map((group) => (
+        <div key={group.label} className="flex flex-col gap-1.5">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {group.label}
+          </p>
+          {group.items.map((item) => (
+            <PaletteItem key={item.type} {...item} onAdd={onAdd} />
+          ))}
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        Tap a field type to add it, or drag it onto the canvas.
+      </p>
+    </div>
+  );
+}
+
+export function FieldPalette({ onAdd }: { onAdd?: (type: FieldType) => void }) {
+  return (
+    <aside className="hidden w-56 shrink-0 flex-col border-r lg:flex">
       <div className="flex h-12 shrink-0 items-center px-4 text-sm font-medium">
         Field types
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-4 px-3 pb-4">
-          {PALETTE_GROUPS.map((group) => (
-            <div key={group.label} className="flex flex-col gap-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {group.label}
-              </p>
-              {group.items.map((item) => (
-                <PaletteItem key={item.type} {...item} />
-              ))}
-            </div>
-          ))}
-        </div>
-        <p className="px-3 pb-3 text-xs text-muted-foreground">
-          Drag a field type onto the canvas to add it.
-        </p>
+        <FieldPaletteContent onAdd={onAdd} />
       </ScrollArea>
     </aside>
   );

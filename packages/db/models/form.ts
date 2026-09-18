@@ -93,6 +93,63 @@ export const formsTable = pgTable(
   ],
 );
 
+// ─── Form Versions ─────────────────────────────────────────
+
+export type FormVersionField = {
+  id: string;
+  type: string;
+  label: string;
+  placeholder: string | null;
+  helpText: string | null;
+  required: boolean;
+  order: number;
+  validationRules: {
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    pattern?: string;
+  } | null;
+  conditionalLogic: {
+    showIf?: {
+      fieldId: string;
+      operator:
+        | "equals"
+        | "not_equals"
+        | "contains"
+        | "greater_than"
+        | "less_than";
+      value: string | number | boolean;
+    };
+  } | null;
+  options: { label: string; value: string; order: number }[] | null;
+};
+
+export const formVersionsTable = pgTable(
+  "form_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    label: varchar("label", { length: 255 }),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description"),
+    themeId: uuid("theme_id"),
+    settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
+    fields: jsonb("fields").$type<FormVersionField[]>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("form_versions_form_id_idx").on(table.formId),
+    uniqueIndex("form_versions_form_version_idx").on(
+      table.formId,
+      table.version,
+    ),
+  ],
+);
+
 // ─── Themes ───────────────────────────────────────────────
 
 export type ThemeBackground =
@@ -264,3 +321,5 @@ export type SelectAnswer = typeof answersTable.$inferSelect;
 export type InsertAnswer = typeof answersTable.$inferInsert;
 export type SelectFormView = typeof formViewsTable.$inferSelect;
 export type InsertFormView = typeof formViewsTable.$inferInsert;
+export type SelectFormVersion = typeof formVersionsTable.$inferSelect;
+export type InsertFormVersion = typeof formVersionsTable.$inferInsert;

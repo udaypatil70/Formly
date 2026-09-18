@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import { Loader2Icon } from "lucide-react";
 
 import { FormBuilder, type FormBuilderMeta } from "~/components/builder/form-builder";
+import { Spinner } from "~/components/ui/spinner";
 import type { BuilderField, BuilderTheme } from "~/lib/builder-types";
 import { trpc } from "~/trpc/client";
 
 export function FormBuilderPage() {
   const { formId } = useParams<{ formId: string }>();
+  const [loadKey, setLoadKey] = useState(0);
 
   const detail = trpc.form.getById.useQuery(
     { id: formId ?? "" },
@@ -16,7 +18,7 @@ export function FormBuilderPage() {
   if (!formId || detail.isLoading) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+        <Spinner className="size-6 text-muted-foreground" />
       </div>
     );
   }
@@ -72,12 +74,19 @@ export function FormBuilderPage() {
       }
     : null;
 
+  const handleVersionRestored = async () => {
+    await detail.refetch();
+    setLoadKey((k) => k + 1);
+  };
+
   return (
     <FormBuilder
+      key={loadKey}
       formId={formId}
       initialMeta={meta}
       initialFields={fields}
       initialTheme={theme}
+      onVersionRestored={() => void handleVersionRestored()}
     />
   );
 }

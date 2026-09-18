@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { AlertTriangleIcon, Loader2Icon, LockOpenIcon } from "lucide-react";
+import { AlertTriangleIcon, LockOpenIcon } from "lucide-react";
 
 import { PasswordGate } from "~/components/public/password-gate";
 import { PublicFormShell } from "~/components/public/public-form-shell";
 import type { PublicFormData, PublicTheme } from "~/components/public/types";
+import { Spinner } from "~/components/ui/spinner";
 import { trpc } from "~/trpc/client";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
 
@@ -40,7 +41,7 @@ export function PublicFormPage() {
   if (!slug || data.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+        <Spinner className="size-6 text-muted-foreground" />
       </div>
     );
   }

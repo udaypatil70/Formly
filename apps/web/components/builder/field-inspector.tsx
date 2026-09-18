@@ -66,36 +66,62 @@ export function FieldInspector({
   onUpdate,
   onDelete,
 }: FieldInspectorProps) {
-  const themes = trpc.theme.getAll.useQuery();
-  const themeList: BuilderTheme[] = themes.data ? themes.data.map(mapTheme) : [];
-
   return (
     <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
       <div className="flex h-12 shrink-0 items-center border-b px-4 text-sm font-medium">
         {field ? "Field settings" : "Form settings"}
       </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-5 p-4">
-          {field ? (
-            <FieldSettings
-              field={field}
-              fields={fields}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-            />
-          ) : (
-            <FormSettings
-              meta={meta}
-              theme={theme}
-              themes={themeList}
-              onUpdateMeta={onUpdateMeta}
-              onSettingsChange={onSettingsChange}
-              onThemeChange={onThemeChange}
-            />
-          )}
-        </div>
-      </ScrollArea>
+      <FieldInspectorContent
+        field={field}
+        fields={fields}
+        theme={theme}
+        meta={meta}
+        onUpdateMeta={onUpdateMeta}
+        onSettingsChange={onSettingsChange}
+        onThemeChange={onThemeChange}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+      />
     </aside>
+  );
+}
+
+export function FieldInspectorContent({
+  field,
+  fields,
+  theme,
+  meta,
+  onUpdateMeta,
+  onSettingsChange,
+  onThemeChange,
+  onUpdate,
+  onDelete,
+}: FieldInspectorProps) {
+  const themes = trpc.theme.getAll.useQuery();
+  const themeList: BuilderTheme[] = themes.data ? themes.data.map(mapTheme) : [];
+
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="flex flex-col gap-5 p-4">
+        {field ? (
+          <FieldSettings
+            field={field}
+            fields={fields}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+          />
+        ) : (
+          <FormSettings
+            meta={meta}
+            theme={theme}
+            themes={themeList}
+            onUpdateMeta={onUpdateMeta}
+            onSettingsChange={onSettingsChange}
+            onThemeChange={onThemeChange}
+          />
+        )}
+      </div>
+    </ScrollArea>
   );
 }
 

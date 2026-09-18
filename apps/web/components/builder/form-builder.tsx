@@ -9,10 +9,13 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
+  HistoryIcon,
   Maximize2Icon,
   MousePointer2Icon,
+  PlusIcon,
   Redo2Icon,
   SaveIcon,
+  Settings2Icon,
   Undo2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,11 +28,18 @@ import type {
   BuilderTheme,
 } from "~/lib/builder-types";
 import { Button } from "~/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "~/components/ui/sheet";
 import { FieldCanvas } from "./field-canvas";
-import { FieldPalette } from "./field-palette";
-import { FieldInspector } from "./field-inspector";
+import { FieldPalette, FieldPaletteContent } from "./field-palette";
+import { FieldInspector, FieldInspectorContent } from "./field-inspector";
 import { PreviewDialog } from "./preview-dialog";
 import { toUpdateInput, buildPublicForm } from "./utils";
+import { VersionHistoryDialog } from "./version-history-dialog";
 
 export interface FormBuilderMeta {
   id: string;
@@ -47,6 +57,8 @@ interface FormBuilderProps {
   initialMeta: FormBuilderMeta;
   initialFields: BuilderField[];
   initialTheme: BuilderTheme | null;
+  /** Called after a version snapshot is restored; the page reloads fresh data. */
+  onVersionRestored?: () => void;
 }
 
 const MAX_HISTORY = 100;
@@ -56,6 +68,7 @@ export function FormBuilder({
   initialMeta,
   initialFields,
   initialTheme,
+  onVersionRestored,
 }: FormBuilderProps) {
   const [meta, setMeta] = useState<FormBuilderMeta>(initialMeta);
   const [theme, setTheme] = useState<BuilderTheme | null>(initialTheme);
@@ -64,6 +77,9 @@ export function FormBuilder({
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const selectedField = fields.find((f) => f.id === selectedId) ?? null;
@@ -430,6 +446,15 @@ export function FormBuilder({
           </Button>
           <StatusBadge status={meta.status} />
           <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setHistoryOpen(true)}
+            aria-label="Version history"
+            title="Version history"
+          >
+            <HistoryIcon />
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setPreviewOpen(true)}
@@ -447,7 +472,7 @@ export function FormBuilder({
         onDragCancel={() => setDragType(null)}
       >
         <div className="flex min-h-0 flex-1">
-          <FieldPalette />
+          <FieldPalette onAdd={addField} />
           <FieldCanvas
             fields={fields}
             selectedId={selectedId}
@@ -486,10 +511,86 @@ export function FormBuilder({
         ) : null}
       </DndContext>
 
+      {/* Mobile action bar */}
+      <div className="flex items-center gap-2 border-t bg-background px-4 py-2.5 lg:hidden">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <PlusIcon /> Add field
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          onClick={() => setInspectorOpen(true)}
+        >
+          <Settings2Icon />
+          {selectedField ? "Edit field" : "Form settings"}
+        </Button>
+      </div>
+
+      {/* Mobile sheets */}
+      <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[75svh] overflow-y-auto"
+        >
+          <SheetHeader>
+            <SheetTitle>Field types</SheetTitle>
+          </SheetHeader>
+          <FieldPaletteContent
+            onAdd={(type) => {
+              addField(type);
+              setPaletteOpen(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85svh] overflow-hidden"
+        >
+          <SheetHeader>
+            <SheetTitle>{selectedField ? "Field settings" : "Form settings"}</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1">
+            <FieldInspectorContent
+              key={selectedField?.id ?? "none"}
+              field={selectedField}
+              fields={fields.map((f) => ({ id: f.id, label: f.label, type: f.type }))}
+              theme={theme}
+              meta={meta}
+              onUpdateMeta={updateMeta}
+              onSettingsChange={updateSettings}
+              onThemeChange={(t) => {
+                setTheme(t);
+                void formUpdate
+                  .mutateAsync({ id: formId, themeId: t?.id })
+                  .catch(() => undefined);
+              }}
+              onUpdate={updateField}
+              onDelete={deleteField}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <PreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         form={previewForm}
+      />
+
+      <VersionHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        formId={formId}
+        onRestored={onVersionRestored ?? (() => undefined)}
       />
     </div>
   );

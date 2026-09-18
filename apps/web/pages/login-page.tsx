@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ClipboardPenIcon, Loader2Icon, LogInIcon, UserPlusIcon } from "lucide-react";
+import { ClipboardPenIcon, LogInIcon, UserPlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { getAuthEndpoints } from "~/lib/api-origin";
@@ -15,6 +15,7 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Spinner } from "~/components/ui/spinner";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -175,7 +176,7 @@ export function LoginPage() {
 
             <Button type="submit" className="h-10 w-full" disabled={loading}>
               {loading ? (
-                <Loader2Icon className="animate-spin" />
+                <Spinner />
               ) : mode === "sign-in" ? (
                 <LogInIcon />
               ) : (

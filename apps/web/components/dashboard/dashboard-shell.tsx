@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { Loader2Icon } from "lucide-react";
 
 import { trpc } from "~/trpc/client";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 import { AppSidebar } from "~/components/dashboard/app-sidebar";
 import { DashboardHeader } from "~/components/dashboard/dashboard-header";
@@ -13,7 +13,7 @@ export function DashboardShell() {
   if (session.isLoading) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+        <Spinner className="size-6 text-muted-foreground" />
       </div>
     );
   }
