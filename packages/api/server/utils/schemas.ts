@@ -100,6 +100,22 @@ export const formMetaOutput = z.object({
       notificationEmail: z.string().optional(),
       sendConfirmation: z.boolean().optional(),
       confirmationEmailFieldId: z.string().uuid().optional(),
+      startScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().optional(),
+          description: z.string().optional(),
+          buttonLabel: z.string().optional(),
+        })
+        .optional(),
+      endScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().optional(),
+          message: z.string().optional(),
+          buttonLabel: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   createdAt: z.string(),

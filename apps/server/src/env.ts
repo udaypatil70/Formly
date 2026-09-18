@@ -5,6 +5,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "prod"]).default("development"),
   BASE_URL: z.string().default("http://localhost:8000"),
   FRONTEND_URL: z.string().default("http://localhost:3000"),
+  UPLOADS_DIR: z
+    .string()
+    .default("./uploads")
+    .describe("Directory for uploaded response files"),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

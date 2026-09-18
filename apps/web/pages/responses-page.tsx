@@ -28,11 +28,23 @@ import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 
+type FileAnswerValue = {
+  fileId?: string;
+  name?: string;
+  url?: string;
+  size?: number;
+  mimeType?: string;
+};
+
 type ResponseRow = {
   id: string;
   submittedAt: string;
   completedInSeconds?: number | null;
-  answers: { fieldId: string; fieldLabel: string; value: string | number | boolean | string[] | null }[];
+  answers: {
+    fieldId: string;
+    fieldLabel: string;
+    value: string | number | boolean | string[] | FileAnswerValue | null;
+  }[];
 };
 
 export function ResponsesPage() {
@@ -334,9 +346,26 @@ export function ResponsesPage() {
                       <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
                         {answer.fieldLabel}
                       </p>
-                      <p className="mt-0.5 text-sm whitespace-pre-wrap">
-                        {formatAnswerValue(answer.value)}
-                      </p>
+<p className="mt-0.5 text-sm whitespace-pre-wrap">
+                      {typeof answer.value === "object" &&
+                      answer.value !== null &&
+                      !Array.isArray(answer.value) ? (
+                        answer.value.url ? (
+                          <a
+                            href={answer.value.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-primary underline underline-offset-2"
+                          >
+                            {answer.value.name ?? "Download file"}
+                          </a>
+                        ) : (
+                          answer.value.name ?? "File"
+                        )
+                      ) : (
+                        formatAnswerValue(answer.value)
+                      )}
+                    </p>
                     </div>
                   ))
                 )}
@@ -360,9 +389,12 @@ export function ResponsesPage() {
   );
 }
 
-function formatAnswerValue(value: string | number | boolean | string[] | null): string {
+function formatAnswerValue(
+  value: string | number | boolean | string[] | FileAnswerValue | null,
+): string {
   if (Array.isArray(value)) return value.join(", ");
   if (value === null || value === undefined) return "\u2014";
+  if (typeof value === "object") return value.name ?? value.url ?? "File";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }

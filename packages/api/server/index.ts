@@ -10,6 +10,7 @@ import { publicRouter } from "./routes/public/route";
 import { themeRouter } from "./routes/theme/route";
 import { adminRouter } from "./routes/admin/route";
 import { templateRouter } from "./routes/template/route";
+import { webhookRouter } from "./routes/webhook/route";
 
 export const serverRouter = router({
   health: healthRouter,
@@ -22,6 +23,7 @@ export const serverRouter = router({
   theme: themeRouter,
   admin: adminRouter,
   template: templateRouter,
+  webhook: webhookRouter,
 });
 
 export { createContext } from "./context";

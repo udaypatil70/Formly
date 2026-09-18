@@ -632,8 +632,18 @@ function defaultLabel(type: BuilderField["type"]): string {
       return "Multiple choice";
     case "rating":
       return "Rating";
+    case "scale":
+      return "Scale (e.g. 1-10)";
     case "date":
       return "Date";
+    case "time":
+      return "Time";
+    case "phone":
+      return "Phone number";
+    case "url":
+      return "Website";
+    case "file_upload":
+      return "File upload";
     case "page_break":
       return "Page break";
     default:

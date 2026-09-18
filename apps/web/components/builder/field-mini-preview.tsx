@@ -27,6 +27,28 @@ export function FieldMiniPreview({ field }: FieldMiniPreviewProps) {
       return <Input defaultValue="" disabled placeholder="0" />;
     case "date":
       return <Input defaultValue="" disabled type="date" />;
+    case "phone":
+      return (
+        <Input
+          defaultValue=""
+          disabled
+          type="tel"
+          placeholder={field.placeholder ?? "+1 555 000 0000"}
+        />
+      );
+    case "url":
+      return (
+        <Input
+          defaultValue=""
+          disabled
+          type="url"
+          placeholder={field.placeholder ?? "https://example.com"}
+        />
+      );
+    case "time":
+      return <Input defaultValue="" disabled type="time" />;
+    case "file_upload":
+      return <Input defaultValue="" disabled placeholder="No file chosen" />;
     case "short_text":
     default:
       return (
@@ -44,7 +66,23 @@ export function FieldStaticPreview({ field }: { field: BuilderField }) {
   if (field.type === "rating") {
     return (
       <div className="flex items-center gap-1 text-sm text-muted-foreground">
-        {"â˜…â˜…â˜…â˜…â˜…".slice(0, 5)}
+        {"★★★★★".slice(0, 5)}
+      </div>
+    );
+  }
+  if (field.type === "scale") {
+    const min = field.validationRules?.min ?? 1;
+    const max = field.validationRules?.max ?? 10;
+    return (
+      <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+        {Array.from({ length: Math.max(max - min + 1, 0) }).map((_, i) => (
+          <span
+            key={min + i}
+            className="flex size-7 items-center justify-center rounded-full border text-xs"
+          >
+            {min + i}
+          </span>
+        ))}
       </div>
     );
   }

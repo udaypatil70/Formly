@@ -31,9 +31,30 @@ export interface PublicTheme {
 export interface PublicFormSettings {
   thankYouMessage?: string;
   stepMode?: "page" | "question";
+  startScreen?: {
+    enabled?: boolean;
+    title?: string;
+    description?: string;
+    buttonLabel?: string;
+  };
+  endScreen?: {
+    enabled?: boolean;
+    title?: string;
+    message?: string;
+    buttonLabel?: string;
+  };
+}
+
+export interface FileAnswer {
+  fileId: string;
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
 }
 
 export interface PublicFormData {
+  id: string;
   title: string;
   description?: string | null;
   requiresPassword: boolean;

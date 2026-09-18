@@ -37,6 +37,7 @@ export const responseViewOutput = z.object({
         z.number(),
         z.boolean(),
         z.array(z.string()),
+        z.record(z.string(), z.unknown()),
         z.null(),
       ]),
     }),
@@ -188,11 +189,17 @@ export const responseRouter = router({
       }
 
       const csvEscape = (value: unknown): string => {
-        const str = Array.isArray(value)
-          ? value.join("; ")
-          : value === null || value === undefined
-            ? ""
-            : String(value);
+        let str: string;
+        if (Array.isArray(value)) {
+          str = value.join("; ");
+        } else if (value === null || value === undefined) {
+          str = "";
+        } else if (typeof value === "object") {
+          const file = value as { name?: string; url?: string };
+          str = file.name ?? (file.url ? String(file.url) : "");
+        } else {
+          str = String(value);
+        }
         return `"${str.replaceAll('"', '""')}"`;
       };
 

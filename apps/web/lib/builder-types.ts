@@ -35,6 +35,18 @@ export interface BuilderFormSettings {
   notificationEmail?: string;
   sendConfirmation?: boolean;
   confirmationEmailFieldId?: string | null;
+  startScreen?: {
+    enabled?: boolean;
+    title?: string;
+    description?: string;
+    buttonLabel?: string;
+  };
+  endScreen?: {
+    enabled?: boolean;
+    title?: string;
+    message?: string;
+    buttonLabel?: string;
+  };
 }
 
 export interface ThemeColorSet {

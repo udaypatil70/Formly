@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { buildResponseSchema, type Field } from "@repo/validators";
-import { CheckCircle2Icon, StarIcon } from "lucide-react";
+import { CheckCircle2Icon, StarIcon, UploadIcon, XIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -16,9 +16,10 @@ import {
 } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+import { getApiOrigin } from "~/lib/api-origin";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
 import { TurnstileWidget } from "./turnstile-widget";
-import type { PublicField, PublicFormData } from "./types";
+import type { FileAnswer, PublicField, PublicFormData } from "./types";
 
 export interface SubmissionMeta {
   honeypot?: string;
@@ -33,10 +34,11 @@ interface PublicFormProps {
 
 const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
 
-function fieldIsVisible(field: PublicField, values: Record<string, unknown>): boolean {
-  const rule = field.conditionalLogic?.showIf;
-  if (!rule) return true;
+type ConditionalRule = NonNullable<PublicField["conditionalLogic"]>["showIf"] & {
+  operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
+};
 
+function evalRule(rule: ConditionalRule, values: Record<string, unknown>): boolean {
   const sourceValue = values[rule.fieldId];
   switch (rule.operator) {
     case "equals":
@@ -56,22 +58,47 @@ function fieldIsVisible(field: PublicField, values: Record<string, unknown>): bo
   }
 }
 
+function evalRuleRef(rule: ConditionalRule, values: Record<string, unknown>): boolean {
+  return evalRule(rule, values);
+}
+
+function fieldIsVisible(field: PublicField, values: Record<string, unknown>): boolean {
+  const logic = field.conditionalLogic;
+  if (!logic) return true;
+
+  if (logic.showIf && !evalRuleRef(logic.showIf, values)) return false;
+
+  const groups = logic.groups ?? [];
+  if (groups.length === 0) return true;
+
+  return groups.some((group) => {
+    if (group.conditions.length === 0) return false;
+    const results = group.conditions.map((c) => evalRuleRef(c, values));
+    return group.all ? results.every(Boolean) : results.some(Boolean);
+  });
+}
+
 function FieldInput({
   field,
   value,
   onChange,
   autoFocus,
+  formId,
 }: {
   field: PublicField;
   value: unknown;
   onChange: (value: unknown) => void;
   autoFocus?: boolean;
+  formId: string;
 }) {
   switch (field.type) {
     case "short_text":
     case "email":
     case "number":
+    case "url":
+    case "time":
     case "date":
+    case "phone":
       return (
         <Input
           name={field.id}
@@ -83,7 +110,13 @@ function FieldInput({
                 ? "number"
                 : field.type === "date"
                   ? "date"
-                  : "text"
+                  : field.type === "time"
+                    ? "time"
+                    : field.type === "url"
+                      ? "url"
+                      : field.type === "phone"
+                        ? "tel"
+                        : "text"
           }
           placeholder={field.placeholder ?? undefined}
           value={typeof value === "string" ? value : ""}
@@ -232,9 +265,178 @@ function FieldInput({
           </span>
         </div>
       );
+    case "scale": {
+      const min = Number(field.validationRules?.min ?? 1);
+      const max = Number(field.validationRules?.max ?? 10);
+      const maxLabel = field.validationRules?.maxLabel;
+      const minLabel = field.validationRules?.minLabel;
+      const count = Math.max(max - min + 1, 1);
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            {Array.from({ length: count }, (_, i) => {
+              const n = min + i;
+              const selected = value === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onChange(n)}
+                  aria-label={`${n} of ${max}`}
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-full border text-sm font-medium transition-colors",
+                    selected
+                      ? "border-transparent bg-primary text-primary-foreground"
+                      : "opacity-70 hover:opacity-100",
+                  )}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          {(minLabel || maxLabel) && (
+            <div className="flex items-center justify-between text-xs opacity-70">
+              <span>{minLabel ?? `${min}`}</span>
+              <span>{maxLabel ?? `${max}`}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+    case "file_upload":
+      return (
+        <FileUploadInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          formId={formId}
+          autoFocus={autoFocus}
+        />
+      );
     default:
       return null;
   }
+}
+
+function FileUploadInput({
+  field,
+  value,
+  onChange,
+  formId,
+  autoFocus,
+}: {
+  field: PublicField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  formId: string;
+  autoFocus?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const file: FileAnswer | null =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as FileAnswer)
+      : null;
+
+  const upload = async (f: File) => {
+    const maxSize = Number(field.validationRules?.maxSize ?? 25);
+    if (f.size > maxSize * 1024 * 1024) {
+      setError(`File exceeds the ${maxSize} MB limit`);
+      return;
+    }
+    const allowed = field.validationRules?.allowedTypes ?? [];
+    if (allowed.length > 0 && !allowed.includes(f.type)) {
+      setError(`File type "${f.type || "unknown"}" is not allowed`);
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("formId", formId);
+      const res = await fetch(`${getApiOrigin()}/upload`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = (await res.json()) as {
+        fileId?: string;
+        name?: string;
+        url?: string;
+        size?: number;
+        mimeType?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.fileId || !json.name || !json.url) {
+        setError(json.error ?? "Upload failed");
+        return;
+      }
+      onChange({
+        fileId: json.fileId,
+        name: json.name,
+        url: `${getApiOrigin()}${json.url}`,
+        size: json.size ?? f.size,
+        mimeType: json.mimeType ?? f.type,
+      } satisfies FileAnswer);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {file ? (
+        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+          <UploadIcon className="size-4 opacity-70" />
+          <span className="min-w-0 flex-1 truncate text-sm">{file.name}</span>
+          <button
+            type="button"
+            onClick={() => {
+              onChange(undefined);
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+            aria-label="Remove file"
+            className="opacity-70 transition-opacity hover:opacity-100"
+          >
+            <XIcon className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <label
+          className={cn(
+            "flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-6 text-center opacity-80 transition-opacity hover:opacity-100",
+            autoFocus && "ring-2 ring-primary",
+          )}
+        >
+          <UploadIcon className="size-5" />
+          <span className="text-sm">
+            {uploading ? "Uploading…" : "Click to upload a file"}
+          </span>
+          <span className="text-xs opacity-70">
+            Max {Number(field.validationRules?.maxSize ?? 25)} MB
+          </span>
+          <input
+            ref={inputRef}
+            type="file"
+            name={field.id}
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void upload(f);
+            }}
+          />
+        </label>
+      )}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
 }
 
 function toValidatorFields(fields: PublicField[]): Field[] {
@@ -266,19 +468,39 @@ export function PublicForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [started, setStarted] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
 
   const stepMode = form.settings?.stepMode ?? "question";
+  const startScreen = form.settings?.startScreen;
+  const endScreen = form.settings?.endScreen;
+  const showStartScreen = Boolean(
+    startScreen?.enabled && !started && !submitted,
+  );
 
-  const schema = useMemo(() => buildResponseSchema(toValidatorFields(form.fields)), [form.fields]);
+  const visibleFields = useMemo(
+    () =>
+      form.fields.filter(
+        (f) => f.type !== "page_break" && fieldIsVisible(f, values),
+      ),
+    [form.fields, values],
+  );
+
+  const schema = useMemo(
+    () => buildResponseSchema(toValidatorFields(visibleFields)),
+    [visibleFields],
+  );
+
+  const flatIndex = useMemo(
+    () => new Map(form.fields.map((f, i) => [f.id, i])),
+    [form.fields],
+  );
 
   // Steps: one field per screen (question mode) or one page per screen (page mode).
   const steps = useMemo<PublicField[][]>(() => {
     if (stepMode === "question") {
-      return form.fields
-        .filter((f) => f.type !== "page_break" && fieldIsVisible(f, values))
-        .map((f) => [f]);
+      return visibleFields.map((f) => [f]);
     }
     const pages: PublicField[][] = [[]];
     for (const f of form.fields) {
@@ -286,12 +508,12 @@ export function PublicForm({
         pages.push([]);
         continue;
       }
-      pages[pages.length - 1]!.push(f);
+      if (fieldIsVisible(f, values)) {
+        pages[pages.length - 1]!.push(f);
+      }
     }
-    return pages
-      .map((page) => page.filter((f) => fieldIsVisible(f, values)))
-      .filter((page) => page.length > 0);
-  }, [stepMode, form.fields, values]);
+    return pages.filter((page) => page.length > 0);
+  }, [stepMode, form.fields, values, visibleFields]);
 
   const totalSteps = steps.length;
   const safeStep = Math.min(currentStep, Math.max(totalSteps - 1, 0));
@@ -301,21 +523,104 @@ export function PublicForm({
   const buildStepSchema = (fields: PublicField[]) =>
     buildResponseSchema(toValidatorFields(fields));
 
+  // Jump targets: a field may send people to a section (page break) or straight
+  // to submission once they reach it.
+  type Jump =
+    | { kind: "next" }
+    | { kind: "submit" }
+    | { kind: "step"; target: number };
+
+  const nextJump = (fields: PublicField[]): Jump => {
+    for (const f of fields) {
+      const logic = f.conditionalLogic;
+      if (!logic) continue;
+      if (logic.gotoSubmit === true) return { kind: "submit" };
+      if (logic.gotoPageId) {
+        const breakIdx = flatIndex.get(logic.gotoPageId);
+        if (breakIdx !== undefined) {
+          const firstAfter = visibleFields.find(
+            (vf) => flatIndex.get(vf.id)! > breakIdx,
+          );
+          if (firstAfter) {
+            const target = steps.findIndex((step) =>
+              step.some((s) => s.id === firstAfter.id),
+            );
+            if (target >= 0) return { kind: "step", target: Math.min(target, totalSteps - 1) };
+          }
+          return { kind: "step", target: Math.max(totalSteps - 1, 0) };
+        }
+      }
+    }
+    return { kind: "next" };
+  };
+
   if (submitted) {
+    const endTitle = endScreen?.title?.trim() || "Response submitted";
+    const endMessage =
+      endScreen?.message?.trim() ||
+      form.settings?.thankYouMessage?.trim() ||
+      "Thank you! Your response has been recorded.";
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <CheckCircle2Icon
           className="size-12"
           style={{ color: form.theme?.colors.primary }}
         />
-        <h2 className="text-2xl font-semibold">Response submitted</h2>
-        <p className="text-muted-foreground">
-          {form.settings?.thankYouMessage?.trim() ||
-            "Thank you! Your response has been recorded."}
-        </p>
-        <Button variant="outline" onClick={() => onReset?.() ?? window.location.reload()}>
-          Submit another response
+        <h2 className="text-2xl font-semibold">{endTitle}</h2>
+        <p className="text-muted-foreground">{endMessage}</p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setSubmitted(false);
+            setValues({});
+            setErrors({});
+            setStarted(true);
+            setCurrentStep(0);
+            onReset?.();
+          }}
+        >
+          {endScreen?.buttonLabel?.trim() || "Submit another response"}
         </Button>
+      </div>
+    );
+  }
+
+  if (showStartScreen) {
+    const startTitle = startScreen?.title?.trim() || form.title;
+    return (
+      <div
+        style={{
+          ...backgroundStyle(form.theme),
+          color: form.theme?.colors.text ?? "#fafafa",
+          fontFamily: fontFamilyFor(form.theme?.font),
+          minHeight: "100%",
+        }}
+      >
+        <div className="mx-auto w-full max-w-xl px-4 py-12">
+          <div
+            className="flex flex-col items-center gap-4 rounded-2xl border p-6 text-center sm:p-8"
+            style={{
+              backgroundColor: form.theme?.colors.surface ?? "#18181b",
+              borderColor: `${form.theme?.colors.text ?? "#fafafa"}1f`,
+            }}
+          >
+            <h1 className="text-2xl font-bold">{startTitle}</h1>
+            {startScreen?.description?.trim() ? (
+              <p className="max-w-md text-sm opacity-80">
+                {startScreen.description.trim()}
+              </p>
+            ) : null}
+            <Button
+              onClick={() => setStarted(true)}
+              className="mt-2"
+              style={{
+                backgroundColor: form.theme?.colors.primary ?? "#6d28d9",
+              }}
+            >
+              {startScreen?.buttonLabel?.trim() || "Start"}
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -343,6 +648,15 @@ export function PublicForm({
   const handleNext = (e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.preventDefault();
     if (!validateStep(currentFields)) return;
+    const jump = nextJump(currentFields);
+    if (jump.kind === "submit") {
+      void handleSubmit(e);
+      return;
+    }
+    if (jump.kind === "step") {
+      goToStep(jump.target);
+      return;
+    }
     goToStep(safeStep + 1);
   };
 
@@ -504,6 +818,7 @@ export function PublicForm({
                       value={values[field.id]}
                       onChange={(v) => updateValue(field.id, v)}
                       autoFocus={currentFields.length === 1}
+                      formId={form.id}
                     />
                     {field.helpText ? (
                       <p className="text-xs opacity-60">{field.helpText}</p>

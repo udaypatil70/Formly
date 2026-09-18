@@ -132,6 +132,7 @@ function SortableFieldItem({
           field.type === "multi_select" ||
           field.type === "radio" ||
           field.type === "rating" ||
+          field.type === "scale" ||
           field.type === "checkbox" ? (
           <FieldStaticPreview field={field} />
         ) : (

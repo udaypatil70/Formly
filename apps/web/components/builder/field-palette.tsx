@@ -3,9 +3,14 @@ import {
   CalendarIcon,
   ChevronDownIcon,
   CircleDotIcon,
+  ClockIcon,
+  FileUpIcon,
+  GaugeIcon,
   HashIcon,
+  LinkIcon,
   ListChecksIcon,
   MailIcon,
+  PhoneIcon,
   SeparatorHorizontalIcon,
   SquareCheckIcon,
   StarIcon,
@@ -31,7 +36,12 @@ export const PALETTE_ITEMS: {
   { type: "checkbox", label: "Checkbox", icon: SquareCheckIcon },
   { type: "radio", label: "Radio", icon: CircleDotIcon },
   { type: "rating", label: "Rating", icon: StarIcon },
+  { type: "scale", label: "Scale (NPS)", icon: GaugeIcon },
   { type: "date", label: "Date", icon: CalendarIcon },
+  { type: "time", label: "Time", icon: ClockIcon },
+  { type: "phone", label: "Phone", icon: PhoneIcon },
+  { type: "url", label: "Website", icon: LinkIcon },
+  { type: "file_upload", label: "File upload", icon: FileUpIcon },
   { type: "page_break", label: "Page break", icon: SeparatorHorizontalIcon },
 ];
 
@@ -47,8 +57,20 @@ export const PALETTE_GROUPS: {
   },
   {
     label: "More",
-    items: PALETTE_ITEMS.filter(
-      ({ type }) => !["short_text", "long_text", "email", "number"].includes(type),
+    items: PALETTE_ITEMS.filter(({ type }) =>
+      [
+        "phone",
+        "url",
+        "date",
+        "time",
+        "single_select",
+        "multi_select",
+        "radio",
+        "checkbox",
+        "rating",
+        "scale",
+        "file_upload",
+      ].includes(type),
     ),
   },
   {

@@ -10,6 +10,7 @@ import { serverRouter, createContext } from "@repo/api/server";
 import { auth } from "@repo/services/auth";
 
 import { env } from "./env";
+import { uploadsRouter } from "./uploads";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
@@ -49,6 +50,9 @@ app.get("/openapi.json", (_req, res) => {
 
 logger.debug(`docs: ${env.BASE_URL}/docs`);
 app.use("/docs", apiReference({ url: "/openapi.json" }));
+
+// File uploads + downloads (multipart endpoint + immutable file serving).
+app.use(uploadsRouter(env.UPLOADS_DIR));
 
 // better-auth handler
 app.all("/auth/{*path}", async (req, res) => {

@@ -38,6 +38,11 @@ export const fieldTypeEnum = pgEnum("field_type", [
   "rating",
   "date",
   "page_break",
+  "phone",
+  "url",
+  "time",
+  "scale",
+  "file_upload",
 ]);
 
 export const themeCategoryEnum = pgEnum("theme_category", [
@@ -83,6 +88,18 @@ export const formsTable = pgTable(
         notificationEmail?: string;
         sendConfirmation?: boolean;
         confirmationEmailFieldId?: string;
+        startScreen?: {
+          enabled: boolean;
+          title?: string;
+          description?: string;
+          buttonLabel?: string;
+        };
+        endScreen?: {
+          enabled: boolean;
+          title?: string;
+          message?: string;
+          buttonLabel?: string;
+        };
       }>()
       .default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -200,6 +217,8 @@ export const fieldsTable = pgTable(
         min?: number;
         max?: number;
         pattern?: string;
+        maxSize?: number;
+        allowedTypes?: string[];
       }>()
       .default({}),
     conditionalLogic: jsonb("conditional_logic")
@@ -214,6 +233,22 @@ export const fieldsTable = pgTable(
             | "less_than";
           value: string | number | boolean;
         };
+        groups?: {
+          id: string;
+          all: boolean;
+          conditions: {
+            fieldId: string;
+            operator:
+              | "equals"
+              | "not_equals"
+              | "contains"
+              | "greater_than"
+              | "less_than";
+            value: string | number | boolean;
+          }[];
+        }[];
+        gotoPageId?: string;
+        gotoSubmit?: boolean;
       }>()
       .default({}),
   },
@@ -276,7 +311,9 @@ export const answersTable = pgTable(
     fieldId: uuid("field_id")
       .notNull()
       .references(() => fieldsTable.id, { onDelete: "cascade" }),
-    value: jsonb("value").$type<string | number | boolean | string[]>(),
+    value: jsonb("value").$type<
+      string | number | boolean | string[] | FileAnswer
+    >(),
   },
   (table) => [
     index("answers_response_id_idx").on(table.responseId),
@@ -307,6 +344,61 @@ export const formViewsTable = pgTable(
   ],
 );
 
+// ─── File Uploads ─────────────────────────────────────────
+// Files are stored on disk (server uploads dir); this table tracks metadata
+// and maps the stored filename back to a safe download name.
+
+export type FileAnswer = {
+  fileId: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  url: string;
+};
+
+export const formFileUploadsTable = pgTable(
+  "form_file_uploads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" }),
+    storedName: text("stored_name").notNull().unique(),
+    originalName: text("original_name").notNull(),
+    mimeType: varchar("mime_type", { length: 100 }).notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("form_file_uploads_form_id_idx").on(table.formId),
+  ],
+);
+
+// ─── Webhooks ─────────────────────────────────────────────
+// Fire-and-forget HTTP callbacks on form events. `secret` (when set) HMAC
+// signs the payload so the receiver can verify authenticity.
+
+export const formWebhooksTable = pgTable(
+  "form_webhooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    secret: text("secret"),
+    events: jsonb("events").$type<string[]>().default(["response.created"]),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    lastStatus: integer("last_status"),
+    lastError: text("last_error"),
+    lastTriggeredAt: timestamp("last_triggered_at"),
+  },
+  (table) => [
+    index("form_webhooks_form_id_idx").on(table.formId),
+  ],
+);
+
 // ─── Types ────────────────────────────────────────────────
 
 export type SelectForm = typeof formsTable.$inferSelect;
@@ -325,3 +417,7 @@ export type SelectFormView = typeof formViewsTable.$inferSelect;
 export type InsertFormView = typeof formViewsTable.$inferInsert;
 export type SelectFormVersion = typeof formVersionsTable.$inferSelect;
 export type InsertFormVersion = typeof formVersionsTable.$inferInsert;
+export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;
+export type InsertFormWebhook = typeof formWebhooksTable.$inferInsert;
+export type SelectFormFileUpload = typeof formFileUploadsTable.$inferSelect;
+export type InsertFormFileUpload = typeof formFileUploadsTable.$inferInsert;

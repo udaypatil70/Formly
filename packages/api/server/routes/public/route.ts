@@ -24,6 +24,7 @@ import { verifyTurnstileToken } from "../../utils/turnstile";
 import { parseUserAgent } from "../../utils/ua";
 import { verifyPassword } from "../../utils/password";
 import { notifyNewResponse } from "../../utils/notifications";
+import { triggerWebhooks } from "../../utils/webhooks";
 import type { SelectForm } from "@repo/db/schema";
 
 const TAGS = ["Public"];
@@ -43,6 +44,22 @@ const publicFormViewOutput = z.object({
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().nullable().optional(),
       stepMode: z.enum(["page", "question"]).optional(),
+      startScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().optional(),
+          description: z.string().optional(),
+          buttonLabel: z.string().optional(),
+        })
+        .optional(),
+      endScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().optional(),
+          message: z.string().optional(),
+          buttonLabel: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   requiresPassword: z.boolean(),
@@ -337,6 +354,14 @@ export const publicRouter = router({
       });
 
       void notifyNewResponse({
+        form,
+        fields: validatorFields,
+        answers: result.data,
+        responseId: responseId.id,
+        submittedAt: responseId.submittedAt.toISOString(),
+      });
+
+      void triggerWebhooks({
         form,
         fields: validatorFields,
         answers: result.data,

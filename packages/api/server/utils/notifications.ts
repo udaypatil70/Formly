@@ -12,6 +12,10 @@ function formatAnswerValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") {
+    const file = value as { name?: unknown; url?: unknown };
+    return `${String(file.name ?? "file")}${file.url ? ` (${String(file.url)})` : ""}`;
+  }
   return String(value);
 }
 

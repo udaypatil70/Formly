@@ -146,13 +146,16 @@ export function PublicFormPage() {
   }
 
   const form: PublicFormData = {
+    id: d.id,
     title: d.title,
     description: d.description ?? null,
     requiresPassword: d.requiresPassword,
-    settings: d.settings?.thankYouMessage || d.settings?.stepMode
+    settings: d.settings
       ? {
           thankYouMessage: d.settings.thankYouMessage ?? undefined,
           stepMode: d.settings.stepMode,
+          startScreen: d.settings.startScreen,
+          endScreen: d.settings.endScreen,
         }
       : undefined,
     theme,

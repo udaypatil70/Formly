@@ -14,6 +14,11 @@ export const FieldType = z.enum([
   "rating",
   "date",
   "page_break",
+  "phone",
+  "url",
+  "time",
+  "scale",
+  "file_upload",
 ]);
 export type FieldType = z.infer<typeof FieldType>;
 
@@ -26,27 +31,45 @@ export const ValidationRulesSchema = z
     min: z.number().optional(),
     max: z.number().optional(),
     pattern: z.string().optional(),
+    maxSize: z.number().int().positive().optional(),
+    allowedTypes: z.array(z.string().max(50)).max(20).optional(),
+    minLabel: z.string().max(100).optional(),
+    maxLabel: z.string().max(100).optional(),
   })
   .optional();
 export type ValidationRules = z.infer<typeof ValidationRulesSchema>;
 
 // ─── Conditional Logic ────────────────────────────────────
 
+export const ConditionalRuleSchema = z.object({
+  fieldId: z.string().uuid(),
+  operator: z.enum([
+    "equals",
+    "not_equals",
+    "contains",
+    "greater_than",
+    "less_than",
+  ]),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+});
+export type ConditionalRule = z.infer<typeof ConditionalRuleSchema>;
+
+export const ConditionalGroupSchema = z.object({
+  id: z.string().uuid(),
+  /** true = AND (every condition), false = OR (any condition). */
+  all: z.boolean().default(true),
+  conditions: z.array(ConditionalRuleSchema).min(1),
+});
+export type ConditionalGroup = z.infer<typeof ConditionalGroupSchema>;
+
 export const ConditionalLogicSchema = z
   .object({
-    showIf: z
-      .object({
-        fieldId: z.string().uuid(),
-        operator: z.enum([
-          "equals",
-          "not_equals",
-          "contains",
-          "greater_than",
-          "less_than",
-        ]),
-        value: z.union([z.string(), z.number(), z.boolean()]),
-      })
-      .optional(),
+    showIf: ConditionalRuleSchema.optional(),
+    groups: z.array(ConditionalGroupSchema).optional(),
+    /** When the field is answered, jump to the page starting at this page-break. */
+    gotoPageId: z.string().uuid().optional(),
+    /** When the field is answered, submit the form immediately. */
+    gotoSubmit: z.boolean().optional(),
   })
   .optional();
 export type ConditionalLogic = z.infer<typeof ConditionalLogicSchema>;
@@ -107,6 +130,22 @@ export const FormSchema = z.object({
       notificationEmail: z.string().optional(),
       sendConfirmation: z.boolean().optional(),
       confirmationEmailFieldId: z.string().uuid().optional(),
+      startScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().max(255).optional(),
+          description: z.string().max(500).optional(),
+          buttonLabel: z.string().max(100).optional(),
+        })
+        .optional(),
+      endScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().max(255).optional(),
+          message: z.string().max(2000).optional(),
+          buttonLabel: z.string().max(100).optional(),
+        })
+        .optional(),
     })
     .optional(),
   createdAt: z.string().datetime(),
@@ -167,6 +206,22 @@ export const CreateFormInput = z.object({
       notificationEmail: z.string().email().optional(),
       sendConfirmation: z.boolean().optional(),
       confirmationEmailFieldId: z.string().uuid().optional(),
+      startScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().max(255).optional(),
+          description: z.string().max(500).optional(),
+          buttonLabel: z.string().max(100).optional(),
+        })
+        .optional(),
+      endScreen: z
+        .object({
+          enabled: z.boolean(),
+          title: z.string().max(255).optional(),
+          message: z.string().max(2000).optional(),
+          buttonLabel: z.string().max(100).optional(),
+        })
+        .optional(),
     })
     .optional(),
   fields: z.array(CreateFieldInput).optional(),
@@ -184,11 +239,21 @@ export type PublishFormInput = z.infer<typeof PublishFormInput>;
 
 // ─── Answer Value Types (per field type) ──────────────────
 
+export const FileAnswerValueSchema = z.object({
+  fileId: z.string().uuid(),
+  name: z.string(),
+  size: z.number().int().nonnegative(),
+  mimeType: z.string(),
+  url: z.string(),
+});
+export type FileAnswerValue = z.infer<typeof FileAnswerValueSchema>;
+
 export const AnswerValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.array(z.string()),
+  FileAnswerValueSchema,
 ]);
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
 
@@ -258,6 +323,53 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
 
     case "date":
       validator = z.string().date();
+      break;
+
+    case "phone":
+      validator = z
+        .string()
+        .regex(/^[+]?[0-9\s\-().]{7,20}$/, "Invalid phone number")
+        .trim();
+      break;
+
+    case "url":
+      validator = z.string().url("Invalid URL");
+      break;
+
+    case "time": {
+      validator = z
+        .string()
+        .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM format")
+        .refine((t) => {
+          if (field.validationRules?.min !== undefined) {
+            return t >= String(field.validationRules.min);
+          }
+          return true;
+        })
+        .refine((t) => {
+          if (field.validationRules?.max !== undefined) {
+            return t <= String(field.validationRules.max);
+          }
+          return true;
+        });
+      break;
+    }
+
+    case "scale": {
+      const min = field.validationRules?.min ?? 1;
+      const max = field.validationRules?.max ?? 10;
+      validator = z.number().int().min(min).max(max);
+      break;
+    }
+
+    case "file_upload":
+      validator = z.object({
+        fileId: z.string().uuid(),
+        name: z.string(),
+        size: z.number().int().nonnegative(),
+        mimeType: z.string(),
+        url: z.string(),
+      });
       break;
 
     default:

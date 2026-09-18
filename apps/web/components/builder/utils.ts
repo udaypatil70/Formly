@@ -49,6 +49,7 @@ export function buildPublicForm(
   }));
 
   return {
+    id: meta.id,
     title: meta.title,
     description: meta.description ?? null,
     requiresPassword: false,
@@ -56,10 +57,12 @@ export function buildPublicForm(
     theme: theme
       ? { colors: theme.colors, font: theme.font ?? null, background: theme.background ?? null }
       : null,
-    settings: meta.settings?.thankYouMessage || meta.settings?.stepMode
+    settings: meta.settings
       ? {
           thankYouMessage: meta.settings.thankYouMessage,
           stepMode: meta.settings.stepMode,
+          startScreen: meta.settings.startScreen,
+          endScreen: meta.settings.endScreen,
         }
       : undefined,
   };
