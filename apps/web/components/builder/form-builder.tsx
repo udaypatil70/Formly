@@ -9,15 +9,21 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  EyeIcon,
   HistoryIcon,
   Maximize2Icon,
   MousePointer2Icon,
+  PlayIcon,
   PlusIcon,
   Redo2Icon,
   SaveIcon,
   Settings2Icon,
+  SquareIcon,
   Undo2Icon,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { UpdateFieldInput } from "@repo/validators";
 
@@ -28,6 +34,13 @@ import type {
   BuilderTheme,
 } from "~/lib/builder-types";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -70,6 +83,7 @@ export function FormBuilder({
   initialTheme,
   onVersionRestored,
 }: FormBuilderProps) {
+  const navigate = useNavigate();
   const [meta, setMeta] = useState<FormBuilderMeta>(initialMeta);
   const [theme, setTheme] = useState<BuilderTheme | null>(initialTheme);
   const [fields, setFields] = useState<BuilderField[]>(() =>
@@ -357,6 +371,34 @@ export function FormBuilder({
       });
   };
 
+  // ─── Publish / unpublish ─────────────────────────────────
+  const publishMutation = trpc.form.publish.useMutation();
+  const unpublishMutation = trpc.form.unpublish.useMutation();
+  const utils = trpc.useUtils();
+  const publishBusy = publishMutation.isPending || unpublishMutation.isPending;
+
+  const togglePublish = async (published: boolean) => {
+    try {
+      if (published) {
+        await publishMutation.mutateAsync({ id: formId });
+        toast.success("Form published");
+      } else {
+        await unpublishMutation.mutateAsync({ id: formId });
+        toast.success("Form unpublished");
+      }
+      setMeta((prev) => ({
+        ...prev,
+        status: published ? "published" : "unpublished",
+      }));
+      await utils.form.getAllMine.invalidate();
+      await utils.form.getById.invalidate({ id: formId });
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to update publish status",
+      );
+    }
+  };
+
   // ─── Public preview data (reuses the same renderer) ──────
   const previewForm = useMemo(
     () => buildPublicForm(meta, fields, theme),
@@ -445,6 +487,45 @@ export function FormBuilder({
             <Redo2Icon />
           </Button>
           <StatusBadge status={meta.status} />
+          {meta.status === "published" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:text-emerald-400"
+                >
+                  <CheckCircle2Icon />
+                  Published
+                  <ChevronDownIcon className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/form/${meta.slug}`)}>
+                  <EyeIcon />
+                  View live
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={publishBusy}
+                  onClick={() => void togglePublish(false)}
+                >
+                  <SquareIcon />
+                  Unpublish
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => void togglePublish(true)}
+              disabled={publishBusy}
+              className="bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500"
+            >
+              <PlayIcon />
+              {publishMutation.isPending ? "Publishing…" : "Publish"}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"

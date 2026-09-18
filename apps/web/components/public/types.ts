@@ -30,7 +30,7 @@ export interface PublicTheme {
 
 export interface PublicFormSettings {
   thankYouMessage?: string;
-  stepMode?: "page" | "question";
+  stepMode?: "all" | "page" | "question";
   startScreen?: {
     enabled?: boolean;
     title?: string;

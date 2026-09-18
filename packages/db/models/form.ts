@@ -83,7 +83,7 @@ export const formsTable = pgTable(
         expiry?: string;
         responseLimit?: number;
         thankYouMessage?: string;
-        stepMode?: "page" | "question";
+        stepMode?: "all" | "page" | "question";
         notifyOnResponse?: boolean;
         notificationEmail?: string;
         sendConfirmation?: boolean;

@@ -8,6 +8,7 @@ import type { FormBuilderMeta } from "./form-builder";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Separator } from "~/components/ui/separator";
 import {
@@ -1410,23 +1411,56 @@ function FormSettings({
         <WebhooksSettings formId={meta.id} />
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="form-step-mode">Step-by-step filling</Label>
+          <Label>Form layout</Label>
           <p className="text-xs text-muted-foreground">
-            Show one question per screen and continue with Enter. Turn off to
-            group questions into pages with page breaks.
+            Choose how questions are presented to the visitor.
           </p>
         </div>
-        <Switch
-          id="form-step-mode"
-          checked={(settings.stepMode ?? "question") === "question"}
-          onCheckedChange={(checked) =>
-            onSettingsChange({
-              stepMode: checked ? "question" : "page",
-            })
+        <RadioGroup
+          value={settings.stepMode ?? "all"}
+          onValueChange={(value) =>
+            onSettingsChange({ stepMode: value as "all" | "page" | "question" })
           }
-        />
+          className="gap-2"
+        >
+          {[
+            {
+              value: "all",
+              title: "All on one page",
+              hint: "Show every question together, then submit once.",
+            },
+            {
+              value: "question",
+              title: "One at a time",
+              hint: "Show a single question per screen, continue with Next.",
+            },
+            {
+              value: "page",
+              title: "One page per section",
+              hint: "Group questions into pages with page breaks.",
+            },
+          ].map((option) => (
+            <Label
+              key={option.value}
+              className={cn(
+                "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 font-normal transition-colors",
+                (settings.stepMode ?? "all") === option.value
+                  ? "border-violet-500/40 bg-violet-500/10"
+                  : "border-border/60 bg-white/[0.02] hover:bg-white/[0.04]",
+              )}
+            >
+              <RadioGroupItem value={option.value} className="mt-0.5" />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">{option.title}</span>
+                <span className="text-muted-foreground text-xs">
+                  {option.hint}
+                </span>
+              </span>
+            </Label>
+          ))}
+        </RadioGroup>
       </div>
 
       <div className="flex flex-col gap-2">

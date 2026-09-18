@@ -30,7 +30,7 @@ export interface BuilderFormSettings {
   expiry?: string | null;
   responseLimit?: number | null;
   thankYouMessage?: string;
-  stepMode?: "page" | "question";
+  stepMode?: "all" | "page" | "question";
   notifyOnResponse?: boolean;
   notificationEmail?: string;
   sendConfirmation?: boolean;

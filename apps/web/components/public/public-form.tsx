@@ -472,7 +472,7 @@ export function PublicForm({
   const [honeypot, setHoneypot] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
 
-  const stepMode = form.settings?.stepMode ?? "question";
+  const stepMode = form.settings?.stepMode ?? "all";
   const startScreen = form.settings?.startScreen;
   const endScreen = form.settings?.endScreen;
   const showStartScreen = Boolean(
@@ -497,10 +497,14 @@ export function PublicForm({
     [form.fields],
   );
 
-  // Steps: one field per screen (question mode) or one page per screen (page mode).
+  // Steps: everything on one page (all), one field per screen (question), or
+  // one page per screen using page breaks (page).
   const steps = useMemo<PublicField[][]>(() => {
     if (stepMode === "question") {
       return visibleFields.map((f) => [f]);
+    }
+    if (stepMode === "all") {
+      return visibleFields.length > 0 ? [visibleFields] : [];
     }
     const pages: PublicField[][] = [[]];
     for (const f of form.fields) {
@@ -514,6 +518,8 @@ export function PublicForm({
     }
     return pages.filter((page) => page.length > 0);
   }, [stepMode, form.fields, values, visibleFields]);
+
+  const isSinglePage = stepMode === "all";
 
   const totalSteps = steps.length;
   const safeStep = Math.min(currentStep, Math.max(totalSteps - 1, 0));
@@ -748,7 +754,7 @@ export function PublicForm({
             <p className="mt-2 text-xs opacity-60">Password protected form</p>
           ) : null}
 
-          {totalSteps > 0 && (
+          {!isSinglePage && totalSteps > 0 && (
             <div className="mt-6">
               <div className="mb-1.5 flex items-center justify-between text-xs opacity-70">
                 <span>

@@ -43,7 +43,7 @@ const publicFormViewOutput = z.object({
       expiry: z.string().nullable().optional(),
       responseLimit: z.number().int().positive().optional(),
       thankYouMessage: z.string().nullable().optional(),
-      stepMode: z.enum(["page", "question"]).optional(),
+      stepMode: z.enum(["all", "page", "question"]).optional(),
       startScreen: z
         .object({
           enabled: z.boolean(),
