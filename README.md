@@ -1,135 +1,156 @@
-# Turborepo starter
+# Formly
 
-This Turborepo starter is maintained by the Turborepo core team.
+Build beautiful forms in minutes. Collect answers, analyze responses, and never touch spreadsheet forms again.
 
-## Using this example
+Formly is a full-featured form builder platform: a drag-and-drop builder, a public form rendering engine with payments, analytics, templates, embeddable forms, custom domains, and an admin panel — all in a pnpm + Turborepo monorepo.
 
-Run the following command:
+## Features
+
+- **Form builder** — drag-and-drop layout, 15+ field types, page modes (all-page / one-at-a-time / page breaks), start & end screens, section jumps, conditional logic groups
+- **Payments** — Razorpay payment field with server-side order creation, checkout, signature verification and webhook sync
+- **Pro subscriptions** — recurring Razorpay subscriptions with a profile page upgrade flow and plan badges
+- **Responses ledger** — real-time responses with analytics and export
+- **Webhooks & email notifications** — per-form webhook delivery with HMAC signatures, SMTP notifications
+- **Sharing & embeds** — share dialog (link / QR / embed code), standalone `embed.js`, iframe embeds, custom domains
+- **Templates & explore** — seed template catalog, explore page, publishing workflow
+- **Auth** — email/password + Google OAuth via better-auth, cookie sessions, role-gated admin panel
+- **Bot protection** — Cloudflare Turnstile
+- **Polish** — dark mode, code-split routes, responsive layouts
+
+## Tech Stack
+
+- **Monorepo**: Turborepo + pnpm
+- **Frontend** (`apps/web`): Vite, React 19, React Router 7, Tailwind CSS v4, Radix UI, @tanstack/react-query, tRPC client
+- **API** (`apps/server`): Express 5, tRPC 11, trpc-to-openapi, Scalar API reference, Multer uploads
+- **Database**: PostgreSQL + Drizzle ORM
+- **Auth**: better-auth
+- **Payments**: Razorpay
+
+## Project Structure
+
+```
+custom-forms/
+├── apps/
+│   ├── web/                 # Vite + React frontend (dashboard, builder, landing, admin)
+│   └── server/              # Express + tRPC API (port 8000)
+├── packages/
+│   ├── api/                 # tRPC routers (auth, builder, public forms, payment, subscription, admin...)
+│   ├── db/                  # Drizzle schema, migrations, seed templates
+│   ├── services/            # better-auth config, email (Nodemailer)
+│   ├── logger/              # shared logger
+│   └── config/              # shared eslint / typescript configs
+└── docs/                    # design docs
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- pnpm 9 (`corepack enable` or `npm i -g pnpm`)
+- PostgreSQL (local or remote)
+
+### 1. Install dependencies
 
 ```sh
-npx create-turbo@latest
+pnpm install
 ```
 
-## What's inside?
+### 2. Configure environment
 
-This Turborepo includes the following packages/apps:
+Copy `.env.example` to `.env` and fill in the values:
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```sh
+cp .env.example .env
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+Required for dev:
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```dotenv
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/dev"
+BETTER_AUTH_SECRET="a-long-random-secret"
+BASE_URL="http://localhost:8000"
+FRONTEND_URL="http://localhost:3000"
+BETTER_AUTH_URL="http://localhost:8000"
+ADMIN_EMAILS="you@example.com"        # comma-separated admin emails
+VITE_API_URL="http://localhost:8000/trpc"
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+Optional features you can leave empty to disable:
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+```dotenv
+# Google OAuth
+GOOGLE_OAUTH_CLIENT_ID=""
+GOOGLE_OAUTH_CLIENT_SECRET=""
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+# Cloudflare Turnstile
+TURNSTILE_SECRET_KEY=""
+VITE_TURNSTILE_SITE_KEY=""
 
-### Remote Caching
+# Razorpay payments + Pro subscriptions
+RAZORPAY_KEY_ID=""
+RAZORPAY_KEY_SECRET=""
+RAZORPAY_WEBHOOK_SECRET=""
+RAZORPAY_PRO_PLAN_ID=""
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+# Email / SMTP
+SMTP_HOST=""
+SMTP_PORT=""
+SMTP_USER=""
+SMTP_PASSWORD=""
+EMAIL_FROM="Formly <noreply@example.com>"
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+> The frontend needs a `VITE_` env only at build time — it's inlined into the bundle.
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+### 3. Run migrations
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+```sh
+pnpm db:migrate
 ```
 
-## Useful Links
+To seed the template catalog (optional):
 
-Learn more about the power of Turborepo:
+```sh
+pnpm --filter @repo/db db:seed
+```
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+### 4. Start the dev servers
+
+```sh
+pnpm dev
+```
+
+- Frontend: http://localhost:3000
+- API: http://localhost:8000 (OpenAPI reference available at `/docs`)
+- Drizzle Studio (DB browser): `pnpm --filter @repo/db dev`
+
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `pnpm dev` | Run web + API in watch mode |
+| `pnpm build` | Build all apps and packages |
+| `pnpm lint` | Lint all apps and packages |
+| `pnpm check-types` | Typecheck all apps and packages |
+| `pnpm db:migrate` | Apply DB migrations |
+| `pnpm db:generate` | Generate a new migration from schema changes |
+| `pnpm format` | Format with Prettier |
+
+## Webhooks
+
+Form webhooks are delivered to URLs configured per form, signed with `x-formly-signature: sha256=<hmac>`. Razorpay webhooks arrive at `POST /api/payments/webhook` (signature-verified, then payment and subscription events are applied).
+
+## Deployment (Render)
+
+Formly deploys as three Render resources from this monorepo:
+
+1. **PostgreSQL** — create in Render, use the external URL for migrations.
+2. **API service** — Root Directory `apps/server`, build `pnpm install && pnpm build`, start `node dist/index.js`. Set `NODE_ENV=development` (CORS is only enabled when not `prod`), `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`/`BASE_URL` = API URL, `FRONTEND_URL` = web URL, plus the optional keys (Google, Razorpay, Turnstile).
+3. **Web service** — Root Directory `apps/web`, build `pnpm install && pnpm build`, start `pnpm start --host 0.0.0.0 --port $PORT`. Set `VITE_API_URL` and `VITE_TURNSTILE_SITE_KEY`.
+
+Run `pnpm db:migrate` against the production database once, then update Google OAuth redirect URI and the Razorpay webhook URL to the API service URL (`https://<api>.onrender.com/api/payments/webhook`).
+
+## License
+
+Private project.
