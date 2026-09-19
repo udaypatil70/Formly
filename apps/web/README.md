@@ -1,6 +1,6 @@
-# Formforge web
+# Formly web
 
-This is the [Vite](https://vitejs.dev) + [React](https://react.dev) frontend for Formforge, bootstrapped from `create-vite`.
+This is the [Vite](https://vitejs.dev) + [React](https://react.dev) frontend for Formly, bootstrapped from `create-vite`.
 
 ## Getting Started
 

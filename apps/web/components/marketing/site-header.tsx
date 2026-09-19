@@ -26,10 +26,7 @@ export function SiteHeader() {
             <ClipboardPenIcon />
           </span>
           <span className="flex items-baseline gap-1 text-[15px] font-semibold tracking-tight">
-            Formforge
-            <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
-              .
-            </span>
+            Formly
           </span>
         </Link>
 

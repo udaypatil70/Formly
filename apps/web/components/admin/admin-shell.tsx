@@ -65,7 +65,7 @@ export function AdminShell() {
           </span>
           <div className="grid leading-tight">
             <span className="truncate text-sm font-semibold">Admin</span>
-            <span className="text-muted-foreground text-xs">Formforge console</span>
+            <span className="text-muted-foreground text-xs">Formly console</span>
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export function AdminShell() {
                 <span className="bg-primary flex size-8 items-center justify-center rounded-md text-primary-foreground [&>svg]:size-4">
                   <ShieldCheckIcon />
                 </span>
-                <SheetTitle className="text-sm font-semibold">Formforge Admin</SheetTitle>
+                <SheetTitle className="text-sm font-semibold">Formly Admin</SheetTitle>
               </SheetHeader>
               <NavLinks />
               <div className="border-t p-3">
@@ -101,7 +101,7 @@ export function AdminShell() {
           <span className="bg-gradient-to-br from-violet-500 to-fuchsia-500 hidden size-7 items-center justify-center rounded-md text-white [&>svg]:size-3.5 sm:flex">
             <ClipboardPenIcon />
           </span>
-          <span className="hidden text-sm font-medium sm:inline">Formforge Admin</span>
+          <span className="hidden text-sm font-medium sm:inline">Formly Admin</span>
 
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />

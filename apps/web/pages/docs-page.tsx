@@ -129,10 +129,10 @@ export function DocsPage() {
                 API Docs
               </Badge>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Build on top of Formforge
+                Build on top of Formly
               </h1>
               <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-                Formforge exposes a fully typed API for fetching forms, submitting
+                Formly exposes a fully typed API for fetching forms, submitting
                 responses, and managing everything you collect. Every route below is
                 also available as an interactive reference and an OpenAPI
                 specification.
@@ -163,7 +163,7 @@ ${API}/trpc/health.health`}</CodeBlock>
             <section id="authentication" className="scroll-mt-24 space-y-4">
               <h2 className="text-2xl font-semibold tracking-tight">Authentication</h2>
               <p className="text-muted-foreground leading-relaxed">
-                Formforge uses cookie-based sessions. Sign in once, and subsequent
+                Formly uses cookie-based sessions. Sign in once, and subsequent
                 requests carry your session automatically — no tokens to manage.
               </p>
               <CodeBlock>{`// Sign in

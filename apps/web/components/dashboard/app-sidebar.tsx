@@ -37,7 +37,7 @@ export function AppSidebar() {
                   <ClipboardPenIcon />
                 </span>
                 <span className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Formforge</span>
+                  <span className="truncate font-semibold">Formly</span>
                   <span className="truncate text-xs text-muted-foreground">
                     Form builder
                   </span>

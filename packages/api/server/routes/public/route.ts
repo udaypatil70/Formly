@@ -41,7 +41,7 @@ import type { SelectForm } from "@repo/db/schema";
 const TAGS = ["Public"];
 
 const hashIp = (ip: string) =>
-  createHash("sha256").update(`formforge-salt:${ip}`).digest("hex");
+  createHash("sha256").update(`formly-salt:${ip}`).digest("hex");
 
 const publicFormViewOutput = z.object({
   id: z.string().uuid(),

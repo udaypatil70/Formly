@@ -38,13 +38,13 @@ async function deliver(
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": "Formforge-Webhooks/1.0",
+      "User-Agent": "Formly-Webhooks/1.0",
     };
     if (secret) {
       const signature = createHmac("sha256", secret)
         .update(body)
         .digest("hex");
-      headers["x-formforge-signature"] = `sha256=${signature}`;
+      headers["x-formly-signature"] = `sha256=${signature}`;
     }
 
     const response = await fetch(url, {

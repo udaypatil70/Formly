@@ -35,7 +35,7 @@ export function NotFoundPage() {
         <Link
           to="/"
           className="bg-gradient-to-br from-violet-500 to-fuchsia-500 mb-8 flex size-11 items-center justify-center rounded-xl text-white shadow-lg shadow-violet-500/25"
-          aria-label="Formforge home"
+          aria-label="Formly home"
         >
           <ClipboardPenIcon className="size-5" />
         </Link>

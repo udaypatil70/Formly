@@ -39,7 +39,7 @@ export function PublicFormPage() {
     if (!isEmbed || !window.parent || window.parent === window) return;
     const post = () => {
       window.parent.postMessage(
-        { __formforgeHeight: document.body.scrollHeight },
+        { __formlyHeight: document.body.scrollHeight },
         "*",
       );
     };

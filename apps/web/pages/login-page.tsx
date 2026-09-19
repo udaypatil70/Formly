@@ -111,7 +111,7 @@ export function LoginPage() {
           <ClipboardPenIcon />
         </span>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Formforge</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Formly</h1>
           <p className="text-muted-foreground text-sm">
             Build forms. Collect answers. Repeat.
           </p>
@@ -209,7 +209,7 @@ export function LoginPage() {
           </form>
 
           <div className="text-muted-foreground mt-5 text-center text-sm">
-            {mode === "sign-in" ? "New to Formforge? " : "Already have an account? "}
+            {mode === "sign-in" ? "New to Formly? " : "Already have an account? "}
             <button
               type="button"
               onClick={() => switchMode(mode === "sign-in" ? "sign-up" : "sign-in")}

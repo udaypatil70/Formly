@@ -154,7 +154,7 @@ const STEPS = [
 const TESTIMONIALS = [
   {
     quote:
-      "We replaced three tools with Formforge. The analytics and export pipeline alone save our team hours every single week.",
+      "We replaced three tools with Formly. The analytics and export pipeline alone save our team hours every single week.",
     name: "Aarav Mehta",
     role: "Product Manager, SaaS",
     initials: "AM",
@@ -254,7 +254,7 @@ export function LandingPage() {
               className="border-border/60 bg-white/5 px-3 py-1 shadow-sm backdrop-blur"
             >
               <SparklesIcon className="text-violet-400" />
-              Introducing Formforge 2.0 — now with email notifications
+              Introducing Formly 2.0 — now with email notifications
             </Badge>
             <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-6xl">
               Forms that look like you.{" "}
@@ -263,7 +263,7 @@ export function LandingPage() {
               </span>
             </h1>
             <p className="text-muted-foreground mx-auto mt-6 max-w-2xl text-base leading-relaxed sm:text-lg">
-              Formforge is the form builder for people who care about design. Drag,
+              Formly is the form builder for people who care about design. Drag,
               drop, branch, analyze — and ship a response-ready form before your
               coffee goes cold.
             </p>
@@ -303,7 +303,7 @@ export function LandingPage() {
                 <span className="size-2.5 rounded-full bg-emerald-500/80" />
                 <span className="text-muted-foreground ml-3 flex items-center gap-1.5 text-xs">
                   <LockKeyholeIcon className="size-3" />
-                  formforge.app/f/feedback
+                  formly.app/f/feedback
                 </span>
               </div>
 
@@ -536,7 +536,7 @@ export function LandingPage() {
                 </span>
               </>
             }
-            description="From a pixel-perfect builder to production-ready APIs, Formforge gives your forms superpowers without the complexity."
+            description="From a pixel-perfect builder to production-ready APIs, Formly gives your forms superpowers without the complexity."
           />
           <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((feature) => (

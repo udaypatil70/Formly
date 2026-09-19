@@ -10,7 +10,7 @@ interface ThemeProviderState {
 
 const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undefined);
 
-const STORAGE_KEY = "formforge-theme";
+const STORAGE_KEY = "formly-theme";
 
 function getInitialTheme(): Theme {
   try {

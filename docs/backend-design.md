@@ -161,7 +161,7 @@ Fire-and-forget on response submit, from
    { "event": "response.created", "form": {…}, "response": { id, submittedAt, answers[] } }
    ```
 3. Sign the exact JSON body with **HMAC-SHA256** using the hook secret and send
-   `x-formforge-signature: sha256=<hex>`. No secret → no header.
+   `x-formly-signature: sha256=<hex>`. No secret → no header.
 4. `POST` with a 10 s timeout; on success/failure update `lastStatus`,
    `lastError`, `lastTriggeredAt`. Failures never affect the stored response.
 

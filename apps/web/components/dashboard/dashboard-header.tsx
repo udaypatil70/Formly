@@ -61,7 +61,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
       <SidebarTrigger className="-ml-1" />
       <div className="flex w-full items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Formforge</span>
+          <span className="text-sm font-medium">Formly</span>
           <span className="text-muted-foreground hidden items-center gap-1 text-xs sm:flex">
             <span className="text-muted-foreground/50">/</span> My Forms
           </span>

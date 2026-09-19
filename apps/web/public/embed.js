@@ -35,7 +35,7 @@
   }
 
   function handleMessage(event) {
-    var height = event.data && event.data.__formforgeHeight;
+    var height = event.data && event.data.__formlyHeight;
     if (typeof height !== "number") return;
     for (var j = 0; j < created.length; j++) {
       if (created[j].contentWindow === event.source) {

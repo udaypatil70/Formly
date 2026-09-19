@@ -15,7 +15,7 @@ import { paymentsRouter } from "./payments";
 
 export const app = express();
 const openApiDocument = generateOpenApiDocument(serverRouter, {
-  title: "Formforge OpenAPI",
+  title: "Formly OpenAPI",
   version: "1.0.0",
   baseUrl: env.BASE_URL.concat("/api"),
 });
@@ -47,11 +47,11 @@ app.use(
 );
 
 app.get("/", (_req, res) => {
-  return res.json({ message: "Formforge is up and running..." });
+  return res.json({ message: "Formly is up and running..." });
 });
 
 app.get("/health", (_req, res) => {
-  return res.json({ message: "Formforge server is healthy", healthy: true });
+  return res.json({ message: "Formly server is healthy", healthy: true });
 });
 
 logger.debug(`openapi.json: ${env.BASE_URL}/openapi.json`);

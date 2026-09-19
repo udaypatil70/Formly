@@ -49,7 +49,7 @@ export function ShareDialog({
   const url = form.customDomain
     ? `https://${form.customDomain}`
     : `${window.location.origin}/form/${form.slug}`;
-  const shareText = `Check out "${form.title}" on FormForge`;
+  const shareText = `Check out "${form.title}" on Formly`;
   const iframeCode = `<iframe src="${url}" width="100%" height="640" style="border:0;border-radius:12px" loading="lazy" allowfullscreen></iframe>`;
   const scriptCode = `<script src="${window.location.origin}/embed.js" data-form="${form.slug}" async></script>`;
   const embedCode = embedType === "iframe" ? iframeCode : scriptCode;

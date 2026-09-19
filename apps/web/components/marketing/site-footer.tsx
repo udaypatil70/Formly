@@ -41,7 +41,7 @@ export function SiteFooter() {
                 <ClipboardPenIcon />
               </span>
               <span className="text-[15px] font-semibold tracking-tight">
-                Formforge
+                Formly
               </span>
             </Link>
             <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
@@ -72,11 +72,11 @@ export function SiteFooter() {
         </div>
 
         <div className="text-muted-foreground mt-12 flex flex-col items-center justify-between gap-4 border-t border-border/60 pt-6 text-sm sm:flex-row">
-          <p>© {new Date().getFullYear()} Formforge. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Formly. All rights reserved.</p>
           <p className="flex items-center gap-1.5">
             Built for makers who ship.
             <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text font-medium text-transparent">
-              Formforge
+              Formly
             </span>
           </p>
         </div>

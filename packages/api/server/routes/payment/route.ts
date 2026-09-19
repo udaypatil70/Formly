@@ -37,7 +37,7 @@ const createOrderOutput = z.object({
 
 /** Hash an IP for storage/privacy (mirrors the public router). */
 function hashIp(ip: string): string {
-  return createHash("sha256").update(`formforge-salt:${ip}`).digest("hex");
+  return createHash("sha256").update(`formly-salt:${ip}`).digest("hex");
 }
 
 export const paymentRouter = router({

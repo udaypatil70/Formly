@@ -1190,7 +1190,7 @@ function WebhooksSettings({ formId }: { formId: string }) {
           <Input
             id="webhook-url"
             type="url"
-            placeholder="https://your-app.com/hooks/formforge"
+            placeholder="https://your-app.com/hooks/formly"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />

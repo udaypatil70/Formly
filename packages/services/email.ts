@@ -19,7 +19,7 @@ export function isEmailConfigured(): boolean {
 function fromAddress(): string {
   if (env.EMAIL_FROM) return env.EMAIL_FROM;
   if (env.SMTP_USER?.includes("@")) return env.SMTP_USER;
-  return "Formforge <noreply@formforge.app>";
+  return "Formly <noreply@formly.app>";
 }
 
 function getTransporter(): Transporter {
@@ -76,7 +76,7 @@ function layout(title: string, body: string): string {
             </tr>
             <tr>
               <td style="padding:20px 32px;border-top:1px solid #e4e4e7;color:#a1a1aa;font-size:12px;">
-                Sent by Formforge
+                Sent by Formly
               </td>
             </tr>
           </table>

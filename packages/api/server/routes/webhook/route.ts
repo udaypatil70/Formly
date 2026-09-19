@@ -187,13 +187,13 @@ export const webhookRouter = router({
       const payload = JSON.stringify(sample);
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "User-Agent": "Formforge-Webhooks/1.0",
+        "User-Agent": "Formly-Webhooks/1.0",
       };
       if (hook.secret) {
         const signature = createHmac("sha256", hook.secret)
           .update(payload)
           .digest("hex");
-        headers["x-formforge-signature"] = `sha256=${signature}`;
+        headers["x-formly-signature"] = `sha256=${signature}`;
       }
 
       try {

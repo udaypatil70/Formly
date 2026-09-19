@@ -654,8 +654,8 @@ export async function seedTemplates(): Promise<void> {
     .insert(usersTable)
     .values({
       id: SYSTEM_ID,
-      name: "Formforge Templates",
-      email: "templates@formforge.app",
+      name: "Formly Templates",
+      email: "templates@formly.app",
       emailVerified: true,
     })
     .onConflictDoNothing({ target: usersTable.id })

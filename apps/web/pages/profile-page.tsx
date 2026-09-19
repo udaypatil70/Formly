@@ -76,7 +76,7 @@ export function ProfilePage() {
       const checkout = new Razorpay({
         key: res.keyId,
         subscription_id: res.subscriptionId,
-        name: "Formforge",
+        name: "Formly",
         description: "Pro plan subscription",
         prefill: { name: res.name, email: res.email },
         theme: { color: "#6d28d9" },
@@ -232,7 +232,7 @@ export function ProfilePage() {
               Plan &amp; billing
             </CardTitle>
             <CardDescription>
-              Your current Formforge plan.
+              Your current Formly plan.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -301,8 +301,8 @@ export function ProfilePage() {
                 <a
                   href={
                     user?.company
-                      ? `mailto:sales@formforge.example?subject=Enterprise plan inquiry — ${encodeURIComponent(user.company)}`
-                      : "mailto:sales@formforge.example?subject=Enterprise plan inquiry"
+                      ? `mailto:sales@formly.example?subject=Enterprise plan inquiry — ${encodeURIComponent(user.company)}`
+                      : "mailto:sales@formly.example?subject=Enterprise plan inquiry"
                   }
                 >
                   Contact sales
