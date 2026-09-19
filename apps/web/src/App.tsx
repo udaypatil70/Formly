@@ -34,6 +34,9 @@ const PublicFormPage = lazy(() =>
 const ResponsesPage = lazy(() =>
   import("~/pages/responses-page").then((m) => ({ default: m.ResponsesPage })),
 );
+const ProfilePage = lazy(() =>
+  import("~/pages/profile-page").then((m) => ({ default: m.ProfilePage })),
+);
 const AnalyticsPage = lazy(() =>
   import("~/pages/analytics-page").then((m) => ({ default: m.AnalyticsPage })),
 );
@@ -78,6 +81,7 @@ export function App() {
         <Route path="/form/:slug" element={<PublicFormPage />} />
         <Route element={<DashboardShell />}>
           <Route path="/dashboard" element={<MyFormsDashboard />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/responses/:formId" element={<ResponsesPage />} />
           <Route path="/analytics/:formId" element={<AnalyticsPage />} />
         </Route>

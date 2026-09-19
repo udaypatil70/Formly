@@ -100,11 +100,54 @@ export interface RazorpayPayment {
   entity: string;
 }
 
-/** Fetches a payment by id from the Razorpay API. */
-export async function fetchRazorpayPayment(
-  paymentId: string,
-): Promise<RazorpayPayment> {
-  return razorpayFetch<RazorpayPayment>("GET", `/payments/${paymentId}`);
+export interface RazorpaySubscription {
+  id: string;
+  plan_id: string;
+  status: string;
+  quantity: number;
+  total_count: number;
+  current_count: number;
+  notes?: Record<string, string> | null;
+  created_at?: number;
+  ended_at?: number | null;
+}
+
+/** Creates a recurring Razorpay subscription linked to a Razorpay plan. */
+export async function createRazorpaySubscription(options: {
+  planId: string;
+  email: string;
+  name: string;
+  totalCount?: number;
+  notes?: Record<string, string>;
+}): Promise<RazorpaySubscription> {
+  return razorpayFetch<RazorpaySubscription>("POST", "/subscriptions", {
+    plan_id: options.planId,
+    total_count: options.totalCount ?? 12,
+    quantity: 1,
+    customer_notify: 1,
+    notify_email: options.email,
+    notes: options.notes ?? {},
+  });
+}
+
+/** Fetches a subscription by id to read its current status. */
+export async function fetchRazorpaySubscription(
+  subscriptionId: string,
+): Promise<RazorpaySubscription> {
+  return razorpayFetch<RazorpaySubscription>(
+    "GET",
+    `/subscriptions/${subscriptionId}`,
+  );
+}
+
+/** Cancels a subscription so no further payments are collected. */
+export async function cancelRazorpaySubscription(
+  subscriptionId: string,
+): Promise<RazorpaySubscription> {
+  return razorpayFetch<RazorpaySubscription>(
+    "POST",
+    `/subscriptions/${subscriptionId}/cancel`,
+  );
 }
 
 /**
@@ -122,6 +165,34 @@ export function verifyRazorpaySignature(options: {
 
   const expected = createHmac("sha256", config.keySecret)
     .update(`${options.orderId}|${options.paymentId}`)
+    .digest("hex");
+
+  const expectedBuf = Buffer.from(expected, "hex");
+  const providedBuf = Buffer.from(options.signature ?? "", "hex");
+  if (
+    expectedBuf.length !== providedBuf.length ||
+    expectedBuf.length === 0
+  ) {
+    return false;
+  }
+  return timingSafeEqual(expectedBuf, providedBuf);
+}
+
+/**
+ * Verifies the signature Razorpay returns in the checkout modal for the first
+ * subscription payment: an HMAC-SHA256 of `subscriptionId|paymentId` signed
+ * with the API key secret.
+ */
+export function verifyRazorpaySubscriptionSignature(options: {
+  subscriptionId: string;
+  paymentId: string;
+  signature: string;
+}): boolean {
+  const config = razorpayConfig();
+  if (!config) return false;
+
+  const expected = createHmac("sha256", config.keySecret)
+    .update(`${options.subscriptionId}|${options.paymentId}`)
     .digest("hex");
 
   const expectedBuf = Buffer.from(expected, "hex");

@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
-import { SearchIcon, ShieldCheckIcon } from "lucide-react";
+import { RocketIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
 
 import { trpc } from "~/trpc/client";
 import { Badge } from "~/components/ui/badge";
@@ -101,6 +101,7 @@ export function AdminUsersPage() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[30%]">User</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Plan</TableHead>
                   <TableHead className="text-right">Forms</TableHead>
                   <TableHead className="text-right">Joined</TableHead>
                 </TableRow>
@@ -129,6 +130,18 @@ export function AdminUsersPage() {
                         </Badge>
                       ) : (
                         <Badge variant="secondary">User</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.plan === "pro" ? (
+                        <Badge className="gap-1 bg-emerald-500 text-white hover:bg-emerald-500">
+                          <RocketIcon className="size-3" />
+                          Pro
+                        </Badge>
+                      ) : user.plan === "enterprise" ? (
+                        <Badge variant="outline">Enterprise</Badge>
+                      ) : (
+                        <Badge variant="secondary">Free</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">

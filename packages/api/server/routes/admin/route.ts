@@ -48,6 +48,7 @@ const adminUserOutput = z.object({
   emailVerified: z.boolean().nullable(),
   createdAt: z.string().nullable(),
   role: z.enum(["admin", "user"]),
+  plan: z.enum(["free", "pro", "enterprise"]).default("free"),
   formCount: z.number(),
 });
 
@@ -222,6 +223,7 @@ export const adminRouter = router({
           emailVerified: row.user.emailVerified,
           createdAt: row.user.createdAt?.toISOString() ?? null,
           role: isAdminEmail(row.user.email) ? "admin" : "user",
+          plan: row.user.plan ?? "free",
           formCount: Number(row.formCount),
         })),
         total: Number(totalRow?.total ?? 0),

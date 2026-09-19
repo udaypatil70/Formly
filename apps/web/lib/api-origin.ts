@@ -15,5 +15,11 @@ export function getAuthEndpoints() {
     origin: getApiOrigin(),
     signIn: `${getApiOrigin()}/auth/sign-in/email`,
     signUp: `${getApiOrigin()}/auth/sign-up/email`,
+    signOut: `${getApiOrigin()}/auth/sign-out`,
+    /** Redirect the browser to the social provider's sign-in flow. */
+    social: (provider: "google") =>
+      `${getApiOrigin()}/auth/sign-in/social?provider=${provider}&callbackURL=${encodeURIComponent(
+        `${window.location.origin}/login`,
+      )}`,
   };
 }

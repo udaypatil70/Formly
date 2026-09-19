@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronsUpDownIcon,
@@ -5,9 +6,8 @@ import {
   PlusIcon,
   UserIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import { trpc } from "~/trpc/client";
+import { getAuthEndpoints } from "~/lib/api-origin";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
@@ -41,11 +41,15 @@ function initials(name: string): string {
 
 export function DashboardHeader({ user }: DashboardHeaderProps) {
   const navigate = useNavigate();
-  const signOut = trpc.auth.signOut.useMutation();
+  const [signOutPending, setSignOutPending] = useState(false);
 
   const handleSignOut = async () => {
+    setSignOutPending(true);
     try {
-      await signOut.mutateAsync();
+      await fetch(getAuthEndpoints().signOut, {
+        method: "POST",
+        credentials: "include",
+      });
     } catch {
       // continue to redirect even if the request fails
     }
@@ -99,9 +103,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                 <span className="text-muted-foreground text-xs">{user.email}</span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => toast.info(`Signed in as ${user.email}`)}
-              >
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <UserIcon />
                 Profile
               </DropdownMenuItem>
@@ -109,7 +111,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => void handleSignOut()}
-                disabled={signOut.isPending}
+                disabled={signOutPending}
               >
                 <LogOutIcon />
                 Sign out

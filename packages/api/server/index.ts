@@ -12,6 +12,7 @@ import { adminRouter } from "./routes/admin/route";
 import { templateRouter } from "./routes/template/route";
 import { webhookRouter } from "./routes/webhook/route";
 import { paymentRouter } from "./routes/payment/route";
+import { subscriptionRouter } from "./routes/subscription/route";
 
 export const serverRouter = router({
   health: healthRouter,
@@ -26,6 +27,7 @@ export const serverRouter = router({
   template: templateRouter,
   webhook: webhookRouter,
   payment: paymentRouter,
+  subscription: subscriptionRouter,
 });
 
 export { createContext } from "./context";

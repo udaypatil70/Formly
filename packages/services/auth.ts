@@ -27,6 +27,35 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    additionalFields: {
+      plan: {
+        type: "string",
+        defaultValue: "free",
+        input: false,
+      },
+      subscriptionId: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      subscriptionStatus: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      company: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      jobTitle: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+    },
+  },
   socialProviders: {
     google: {
       clientId: env.GOOGLE_OAUTH_CLIENT_ID ?? "",

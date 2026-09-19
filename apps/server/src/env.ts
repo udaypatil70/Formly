@@ -12,6 +12,10 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_PRO_PLAN_ID: z
+    .string()
+    .optional()
+    .describe("Razorpay plan id used for Pro subscriptions"),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {
