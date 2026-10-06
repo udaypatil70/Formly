@@ -233,7 +233,7 @@ Environment (no quotes, no trailing slashes):
 
 ```
 PORT=8000
-NODE_ENV=development
+NODE_ENV=prod
 BASE_URL=https://<api>.onrender.com
 BETTER_AUTH_URL=https://<api>.onrender.com
 FRONTEND_URL=https://<frontend-domain-or-vercel-url>
@@ -247,7 +247,7 @@ RAZORPAY_PRO_PLAN_ID=plan_...
 TURNSTILE_SECRET_KEY=...
 ```
 
-> `NODE_ENV` must be `development` (or unset) for CORS to be enabled — `prod` disables it.
+> CORS is enabled in all environments and restricted to the exact `FRONTEND_URL` origin. Set `FRONTEND_URL` to the frontend's deployed origin.
 
 **3. Migrations — run once from your machine**
 
