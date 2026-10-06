@@ -24,7 +24,11 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/auth",
-  trustedOrigins: [env.FRONTEND_URL],
+  // FRONTEND_URL may hold a comma-separated list of allowed origins
+  // (e.g. "https://app.vercel.app,https://app-git-main.vercel.app").
+  trustedOrigins: env.FRONTEND_URL.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
   emailAndPassword: {
     enabled: true,
   },

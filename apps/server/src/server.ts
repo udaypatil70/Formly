@@ -20,10 +20,16 @@ const openApiDocument = generateOpenApiDocument(serverRouter, {
   baseUrl: env.BASE_URL.concat("/api"),
 });
 
+// FRONTEND_URL may hold a comma-separated list of allowed origins
+// (e.g. "https://app.vercel.app,https://app-git-main.vercel.app").
+const allowedOrigins = env.FRONTEND_URL.split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || origin === env.FRONTEND_URL) {
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(null, false);
