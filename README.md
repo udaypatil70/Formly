@@ -167,6 +167,8 @@ All configuration is loaded via `.env` at the repo root (workspaces share it thr
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Email notifications |
 
 > `VITE_*` variables are inlined into the frontend bundle at build time — changing them requires a frontend rebuild/redeploy.
+>
+> For local development, keep `BETTER_AUTH_URL` and `BASE_URL` set to the API origin (for example, `http://localhost:8000`). Only `VITE_API_URL` includes the `/trpc` suffix.
 
 ## Available Scripts
 

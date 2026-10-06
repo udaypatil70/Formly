@@ -7,7 +7,7 @@ import { generateOpenApiDocument, createOpenApiExpressMiddleware } from "trpc-to
 import { apiReference } from "@scalar/express-api-reference";
 
 import { serverRouter, createContext } from "@repo/api/server";
-import { auth } from "@repo/services/auth";
+import { authHandler } from "@repo/services/auth";
 
 import { env } from "./env";
 import { uploadsRouter } from "./uploads";
@@ -33,6 +33,9 @@ if (env.NODE_ENV !== "prod") {
     }),
   );
 }
+
+// Mount before JSON parsing so Better Auth can read the original request stream.
+app.use("/auth", authHandler);
 
 app.use(
   express.json({
@@ -64,36 +67,6 @@ app.use("/docs", apiReference({ url: "/openapi.json" }));
 
 // File uploads + downloads (multipart endpoint + immutable file serving).
 app.use(uploadsRouter(env.UPLOADS_DIR));
-
-// better-auth handler
-app.all("/auth/{*path}", async (req, res) => {
-  try {
-    const url = new URL(req.url ?? "/", env.BASE_URL);
-    const headers = new Headers();
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (value) headers.set(key, Array.isArray(value) ? value[0] ?? "" : value);
-    }
-
-    const response = await auth.handler(new Request(url, {
-      method: req.method,
-      headers,
-      body: ["POST", "PUT", "PATCH"].includes(req.method ?? "")
-        ? JSON.stringify(req.body)
-        : undefined,
-    }));
-
-    res.status(response.status);
-    response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
-    });
-
-    const body = await response.text();
-    res.send(body);
-  } catch (error) {
-    logger.error("Auth handler error", { error });
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 app.use(
   "/api/payments",

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { toNodeHandler } from "better-auth/node";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { randomUUID } from "node:crypto";
 import { db } from "@repo/db";
@@ -74,5 +75,7 @@ export const auth = betterAuth({
     },
   },
 });
+
+export const authHandler = toNodeHandler(auth);
 
 export type Session = typeof auth.$Infer.Session;
