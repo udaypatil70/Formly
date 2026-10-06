@@ -20,19 +20,17 @@ const openApiDocument = generateOpenApiDocument(serverRouter, {
   baseUrl: env.BASE_URL.concat("/api"),
 });
 
-if (env.NODE_ENV !== "prod") {
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || origin === env.FRONTEND_URL) {
-          return callback(null, true);
-        }
-        return callback(null, false);
-      },
-      credentials: true,
-    }),
-  );
-}
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || origin === env.FRONTEND_URL) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+  }),
+);
 
 // Mount before JSON parsing so Better Auth can read the original request stream.
 app.use("/auth", authHandler);
