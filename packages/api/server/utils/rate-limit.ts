@@ -15,6 +15,13 @@ export interface RateLimitResult {
 }
 
 /**
+ * Upper bound of every window passed by callers (the 15-minute password
+ * budget). The collector below deletes rows older than this, so no caller may
+ * use a longer window — anything older is outside every live window.
+ */
+const MAX_WINDOW_MS = 15 * 60_000;
+
+/**
  * Postgres-backed sliding-window rate limiter backed by `rate_limit_log`.
  *
  * The hit is recorded *before* the window is counted, so the count always
@@ -27,14 +34,24 @@ export async function rateLimit(
   key: string,
   { limit, windowMs }: RateLimitOptions,
 ): Promise<RateLimitResult> {
+  if (windowMs > MAX_WINDOW_MS) {
+    throw new Error(
+      `rateLimit window (${windowMs}ms) exceeds MAX_WINDOW_MS (${MAX_WINDOW_MS}ms); raise the collector horizon first`,
+    );
+  }
+
   const now = new Date();
   const windowStart = new Date(now.getTime() - windowMs);
   const id = randomUUID();
 
-  // Served by rate_limit_log_hits_at_idx, so this stays cheap as the table grows.
+  // Collect rows older than EVERY live window. Pruning against the caller's
+  // own shorter window would let a 60-second limiter wipe the rows of the
+  // 15-minute password budget and silently disable it; pruning only rows that
+  // no window can still see keeps every budget intact while dead buckets are
+  // still collected. Served by the hits_at index.
   await db
     .delete(rateLimitLogTable)
-    .where(lt(rateLimitLogTable.hitsAt, windowStart))
+    .where(lt(rateLimitLogTable.hitsAt, new Date(now.getTime() - MAX_WINDOW_MS)))
     .execute();
 
   await db

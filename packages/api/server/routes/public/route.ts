@@ -271,7 +271,7 @@ export const publicRouter = router({
 
       if (form.settings?.password) {
         const passwordLimited = await rateLimit(
-          `formpass:${form.id}:${ipKey}`,
+          `formpass:${form.id}:${hashIp(ipKey)}`,
           { limit: 10, windowMs: 15 * 60_000 },
         );
         if (passwordLimited.limited) {
