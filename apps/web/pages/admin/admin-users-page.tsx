@@ -57,7 +57,7 @@ export function AdminUsersPage() {
             Every account on the platform.
           </p>
         </div>
-        <div className="relative">
+        <div className="relative w-full sm:w-64">
           <SearchIcon className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
           <Input
             value={search}
@@ -66,7 +66,7 @@ export function AdminUsersPage() {
               setPage(1);
             }}
             placeholder="Search name or email…"
-            className="h-9 w-64 pl-9"
+            className="h-9 w-full pl-9"
           />
         </div>
       </div>
@@ -96,14 +96,15 @@ export function AdminUsersPage() {
       ) : (
         <>
           <div className="bg-card overflow-hidden rounded-lg border">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[30%]">User</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Plan</TableHead>
+                  <TableHead className="hidden sm:table-cell">Plan</TableHead>
                   <TableHead className="text-right">Forms</TableHead>
-                  <TableHead className="text-right">Joined</TableHead>
+                  <TableHead className="hidden text-right md:table-cell">Joined</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -132,7 +133,7 @@ export function AdminUsersPage() {
                         <Badge variant="secondary">User</Badge>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {user.plan === "pro" ? (
                         <Badge className="gap-1 bg-emerald-500 text-white hover:bg-emerald-500">
                           <RocketIcon className="size-3" />
@@ -147,13 +148,14 @@ export function AdminUsersPage() {
                     <TableCell className="text-right tabular-nums">
                       {user.formCount}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-right text-xs">
+                    <TableCell className="text-muted-foreground hidden text-right text-xs md:table-cell">
                       {formatDate(user.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           </div>
 
           <Pagination className="mt-6">
