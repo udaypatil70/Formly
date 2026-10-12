@@ -87,7 +87,7 @@ export function AdminFormsPage() {
             Every form on the platform. Toggle featured to curate the Explore page.
           </p>
         </div>
-        <div className="relative">
+        <div className="relative w-full sm:w-64">
           <SearchIcon className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
           <Input
             value={search}
@@ -96,7 +96,7 @@ export function AdminFormsPage() {
               setPage(1);
             }}
             placeholder="Search forms…"
-            className="h-9 w-64 pl-9"
+            className="h-9 w-full pl-9"
           />
         </div>
       </div>
@@ -157,6 +157,7 @@ export function AdminFormsPage() {
       ) : (
         <>
           <div className="bg-card overflow-hidden rounded-lg border">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -222,6 +223,7 @@ export function AdminFormsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </div>
 
           <Pagination className="mt-6">

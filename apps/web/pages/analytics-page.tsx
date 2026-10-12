@@ -374,12 +374,12 @@ export function AnalyticsPage() {
           <ArrowLeftIcon />
           Back to forms
         </Button>
-        <div className="mt-1 flex items-center gap-3">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <ChartColumnIcon className="size-6" />
-            Analytics
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-xl font-semibold tracking-tight sm:text-2xl">
+            <ChartColumnIcon className="size-6 shrink-0" />
+            <span>Analytics</span>
             {formQuery.data && (
-              <span className="text-muted-foreground text-base font-normal">
+              <span className="text-muted-foreground min-w-0 break-words text-base font-normal">
                 · {formQuery.data.form.title}
               </span>
             )}

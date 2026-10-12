@@ -172,14 +172,15 @@ export function MyFormsDashboard() {
         </Empty>
       ) : (
         <div className="bg-card overflow-hidden rounded-lg border">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[42%]">Form</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Responses</TableHead>
-                <TableHead className="text-right">Views</TableHead>
-                <TableHead className="text-right">Updated</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Responses</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Views</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Updated</TableHead>
                 <TableHead className="w-12">
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -210,13 +211,13 @@ export function MyFormsDashboard() {
                       <VisibilityBadge visibility={form.visibility} />
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
                     {form.responseCount}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="hidden text-right tabular-nums md:table-cell">
                     {form.viewCount}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
+                  <TableCell className="text-muted-foreground hidden text-right text-xs tabular-nums md:table-cell">
                     {formatDate(form.updatedAt ?? form.createdAt)}
                   </TableCell>
                   <TableCell>
@@ -335,6 +336,7 @@ export function MyFormsDashboard() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 

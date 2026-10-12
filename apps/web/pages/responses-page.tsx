@@ -165,13 +165,13 @@ export function ResponsesPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full sm:w-auto">
             <SearchIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
             <Input
               aria-label="Search answers"
               placeholder="Search answers\u2026"
-              className="h-9 w-56 pl-8"
+              className="h-9 w-full pl-8 sm:w-56"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -179,10 +179,11 @@ export function ResponsesPage() {
               }}
             />
           </div>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           <Input
             type="date"
             aria-label="From date"
-            className="h-9 w-36"
+            className="h-9 w-full"
             value={from}
             onChange={(e) => {
               setFrom(e.target.value);
@@ -192,14 +193,20 @@ export function ResponsesPage() {
           <Input
             type="date"
             aria-label="To date"
-            className="h-9 w-36"
+            className="h-9 w-full"
             value={to}
             onChange={(e) => {
               setTo(e.target.value);
               setPage(1);
             }}
           />
-          <Button variant="outline" onClick={() => void handleExport()} disabled={exporting || total === 0}>
+          </div>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => void handleExport()}
+            disabled={exporting || total === 0}
+          >
             <DownloadIcon />
             Export CSV
           </Button>
@@ -244,11 +251,12 @@ export function ResponsesPage() {
         </Empty>
       ) : (
         <div className="bg-card overflow-hidden rounded-lg border">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Submitted</TableHead>
-                <TableHead>Time taken</TableHead>
+                <TableHead className="hidden sm:table-cell">Time taken</TableHead>
                 <TableHead className="text-right">Answers</TableHead>
                 <TableHead className="w-24">
                   <span className="sr-only">Actions</span>
@@ -265,7 +273,7 @@ export function ResponsesPage() {
                   <TableCell className="tabular-nums">
                     {formatDateTime(response.submittedAt)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm tabular-nums">
+                  <TableCell className="text-muted-foreground hidden text-sm tabular-nums sm:table-cell">
                     {formatDuration(response.completedInSeconds)}
                   </TableCell>
                   <TableCell className="text-right">
@@ -299,11 +307,12 @@ export function ResponsesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
+            <div className="flex flex-col items-center justify-between gap-2 border-t px-4 py-3 sm:flex-row">
               <p className="text-muted-foreground text-sm tabular-nums">
                 Page {page} of {totalPages}
               </p>
