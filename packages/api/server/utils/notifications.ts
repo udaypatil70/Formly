@@ -6,7 +6,12 @@ import {
   sendResponseNotification,
 } from "@repo/services/email";
 
-const frontendUrl = () => process.env.FRONTEND_URL ?? "http://localhost:3000";
+/**
+ * FRONTEND_URL can hold a comma-separated allow-list. Links in emails must
+ * point at a single origin, so the first entry is used.
+ */
+const frontendUrl = () =>
+  (process.env.FRONTEND_URL ?? "http://localhost:3000").split(",")[0]!.trim();
 
 function formatAnswerValue(value: unknown): string {
   if (value === null || value === undefined) return "—";

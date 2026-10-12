@@ -164,12 +164,14 @@ async function blockedState(
   return null;
 }
 
-/** Checks the (optional) form password against a plaintext attempt. */
-function passwordState(form: SelectForm, password?: string) {
+/** Checks the (optional) form password against a submitted attempt. */
+async function passwordState(form: SelectForm, password?: string) {
   const stored = form.settings?.password;
   if (!stored) return { locked: false };
   if (password == null || password === "") return { locked: true };
-  if (!verifyPassword(password, stored)) return { locked: true, incorrect: true };
+  if (!(await verifyPassword(password, stored))) {
+    return { locked: true, incorrect: true };
+  }
   return { locked: false };
 }
 
@@ -215,7 +217,7 @@ async function buildPublicFormView(
     };
   }
 
-  const auth = passwordState(form, password);
+  const auth = await passwordState(form, password);
   if (auth.locked) {
     return {
       ...base,
@@ -266,6 +268,20 @@ export const publicRouter = router({
       }
 
       const form = await loadPublishedForm(input.slug);
+
+      if (form.settings?.password) {
+        const passwordLimited = await rateLimit(
+          `formpass:${form.id}:${ipKey}`,
+          { limit: 10, windowMs: 15 * 60_000 },
+        );
+        if (passwordLimited.limited) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many incorrect password attempts, try again later",
+          });
+        }
+      }
+
       const view = await buildPublicFormView(form, input.password);
 
       if (view.locked || view.blocked) {
@@ -289,7 +305,21 @@ export const publicRouter = router({
   resolveDomain: publicProcedure
     .input(resolveDomainInput)
     .output(publicFormViewOutput)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Custom-domain forms are reachable without knowing a slug, so the
+      // password gate here needs the same budget as the slug entry point.
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`domain:${hashIp(ipKey)}`, {
+        limit: 30,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
       const domain = normalizeDomain(input.domain);
       const form = await getFormBy(
         and(
@@ -298,6 +328,20 @@ export const publicRouter = router({
           eq(formsTable.archived, false),
         )!,
       );
+
+      if (form.settings?.password) {
+        const passwordLimited = await rateLimit(
+          `formpass:${form.id}:${hashIp(ipKey)}`,
+          { limit: 10, windowMs: 15 * 60_000 },
+        );
+        if (passwordLimited.limited) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many incorrect password attempts, try again later",
+          });
+        }
+      }
+
       return buildPublicFormView(form, input.password);
     }),
 
@@ -343,7 +387,7 @@ export const publicRouter = router({
             message: "This form is password protected",
           });
         }
-        if (!verifyPassword(input.password, settings.password)) {
+        if (!(await verifyPassword(input.password, settings.password))) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Incorrect password",
@@ -451,9 +495,38 @@ export const publicRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Rate limiting happens before any DB lookup or password check. Checking
+      // the password first let an attacker guess it with unlimited attempts,
+      // because the rejection path returned before ever reaching the limiter.
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`submit:${hashIp(ipKey)}`, {
+        limit: 5,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many submissions, please try again later",
+        });
+      }
+
       const form = await loadPublishedForm(input.slug);
       const settings = form.settings ?? {};
       const { password } = input;
+
+      // Separate, much tighter budget for password guesses on protected forms.
+      if (settings.password) {
+        const passwordLimited = await rateLimit(
+          `formpass:${form.id}:${hashIp(ipKey)}`,
+          { limit: 10, windowMs: 15 * 60_000 },
+        );
+        if (passwordLimited.limited) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many incorrect password attempts, try again later",
+          });
+        }
+      }
 
       if (settings.expiry) {
         const expiry = new Date(settings.expiry);
@@ -472,7 +545,7 @@ export const publicRouter = router({
             message: "This form is password protected",
           });
         }
-        if (!verifyPassword(password, settings.password)) {
+        if (!(await verifyPassword(password, settings.password))) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Incorrect password",
@@ -509,18 +582,6 @@ export const publicRouter = router({
             message: "This form has reached its response limit",
           });
         }
-      }
-
-      const ipKey = ctx.ip ?? "unknown";
-      const limited = await rateLimit(`submit:${hashIp(ipKey)}`, {
-        limit: 5,
-        windowMs: 60_000,
-      });
-      if (limited.limited) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many submissions, please try again later",
-        });
       }
 
       const { fields, optionsByField } = await getFieldsForForm(form.id);

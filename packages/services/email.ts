@@ -56,6 +56,32 @@ export async function sendEmail({ to, subject, text, html }: BaseEmail) {
   }
 }
 
+// ─── HTML Escaping ────────────────────────────────────────
+
+/**
+ * Escapes text for interpolation into the HTML email templates. Form titles,
+ * thank-you messages and respondent answers are all user-controlled, so every
+ * value that lands inside markup goes through here.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+/**
+ * Escapes a value destined for an href attribute and refuses any scheme other
+ * than http(s), so a crafted value cannot inject markup or a `javascript:` URL.
+ */
+function escapeUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return "#";
+  return escapeHtml(trimmed);
+}
+
 // ─── Templates ─────────────────────────────────────────────
 
 function layout(title: string, body: string): string {
@@ -107,12 +133,15 @@ export async function sendConfirmationEmail({
   const friendlyThankYou =
     thankYouMessage?.trim() || "Thanks for submitting your response.";
 
+  const safeTitle = escapeHtml(formTitle);
+  const safeThankYou = escapeHtml(friendlyThankYou);
+
   const body = `
-    <p style="margin:0 0 16px;">Your response to <strong>${formTitle}</strong> was received successfully.</p>
-    <p style="margin:0 0 16px;">${friendlyThankYou}</p>
+    <p style="margin:0 0 16px;">Your response to <strong>${safeTitle}</strong> was received successfully.</p>
+    <p style="margin:0 0 16px;">${safeThankYou}</p>
     ${
       formUrl
-        ? `<a href="${formUrl}" style="display:inline-block;margin-top:8px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">View form</a>`
+        ? `<a href="${escapeUrl(formUrl)}" style="display:inline-block;margin-top:8px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">View form</a>`
         : ""
     }
   `;
@@ -142,18 +171,18 @@ export async function sendResponseNotification({
   const rows = answers
     .map(
       (answer) => `<tr>
-        <td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:35%;vertical-align:top;">${answer.label}</td>
-        <td style="padding:8px 0;color:#18181b;font-size:14px;vertical-align:top;">${answer.value}</td>
+        <td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:35%;vertical-align:top;">${escapeHtml(answer.label)}</td>
+        <td style="padding:8px 0;color:#18181b;font-size:14px;vertical-align:top;">${escapeHtml(answer.value)}</td>
       </tr>`,
     )
     .join("");
 
   const body = `
-    <p style="margin:0 0 16px;">Your form <strong>${formTitle}</strong> just received a new response.</p>
+    <p style="margin:0 0 16px;">Your form <strong>${escapeHtml(formTitle)}</strong> just received a new response.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e4e4e7;">
       ${rows || `<tr><td style="padding:8px 0;color:#a1a1aa;font-size:14px;">The response contained no answers.</td></tr>`}
     </table>
-    <a href="${responsesUrl}" style="display:inline-block;margin-top:16px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">View responses</a>
+    <a href="${escapeUrl(responsesUrl)}" style="display:inline-block;margin-top:16px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">View responses</a>
   `;
 
   await sendEmail({

@@ -365,9 +365,9 @@ export function ResponsesPage() {
                       {typeof answer.value === "object" &&
                       answer.value !== null &&
                       !Array.isArray(answer.value) ? (
-                        answer.value.url ? (
+                        safeAnswerUrl(answer.value.url) ? (
                           <a
-                            href={answer.value.url}
+                            href={safeAnswerUrl(answer.value.url)}
                             target="_blank"
                             rel="noreferrer noopener"
                             className="text-primary underline underline-offset-2"
@@ -420,6 +420,27 @@ export function ResponsesPage() {
       />
     </div>
   );
+}
+
+/**
+ * Only http(s) links are rendered as anchors. A respondent controls the file
+ * answer payload, so a `javascript:` URL must never reach an href.
+ */
+function safeAnswerUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (/^\s*(?:javascript|data|vbscript|blob|file):/i.test(trimmed)) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function formatAnswerValue(

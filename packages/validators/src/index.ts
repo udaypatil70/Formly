@@ -31,7 +31,7 @@ export const ValidationRulesSchema = z
     maxLength: z.number().int().positive().optional(),
     min: z.number().optional(),
     max: z.number().optional(),
-    pattern: z.string().optional(),
+    pattern: z.string().max(200).optional(),
     maxSize: z.number().int().positive().optional(),
     allowedTypes: z.array(z.string().max(50)).max(20).optional(),
     minLabel: z.string().max(100).optional(),
@@ -85,6 +85,35 @@ export const ConditionalLogicSchema = z
   })
   .optional();
 export type ConditionalLogic = z.infer<typeof ConditionalLogicSchema>;
+
+// ─── URL Safety ───────────────────────────────────────────
+
+/**
+ * URL schemes that can execute script when placed in an `href`/`src`
+ * (`javascript:`, `data:text/html`, `vbscript:`). These must never survive
+ * into a rendered link, so every user-supplied URL is checked against this.
+ */
+const DANGEROUS_SCHEME = /^\s*(?:javascript|data|vbscript|blob|file):/i;
+
+/**
+ * Validates a URL that will be rendered as a link. Only `http(s)` is allowed,
+ * which blocks `javascript:` and other script-executing schemes.
+ */
+export function safeHttpUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || DANGEROUS_SCHEME.test(trimmed)) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Zod schema for a URL destined for an anchor href. */
+export const SafeUrlSchema = z.string().refine(safeHttpUrl, {
+  message: "URL must start with http:// or https://",
+});
 
 // ─── Field Option ─────────────────────────────────────────
 
@@ -259,10 +288,10 @@ export type PublishFormInput = z.infer<typeof PublishFormInput>;
 
 export const FileAnswerValueSchema = z.object({
   fileId: z.string().uuid(),
-  name: z.string(),
+  name: z.string().max(255),
   size: z.number().int().nonnegative(),
-  mimeType: z.string(),
-  url: z.string(),
+  mimeType: z.string().max(255),
+  url: SafeUrlSchema,
 });
 export type FileAnswerValue = z.infer<typeof FileAnswerValueSchema>;
 
@@ -285,6 +314,50 @@ export const AnswerValueSchema = z.union([
 ]);
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
 
+// ─── Regex Safety ─────────────────────────────────────────
+
+/** Hard ceiling on the string a user-supplied regex is ever tested against. */
+const REGEX_INPUT_MAX = 10_000;
+
+/**
+ * Shapes that cause catastrophic backtracking, e.g. `(a+)+`, `(a|a)*`,
+ * `(.*)*`. Rejecting them keeps a form owner's typo from becoming a
+ * server-side denial of service on every submission.
+ */
+const CATASTROPHIC_PATTERN =
+  /\((?:\?:)?[^()]*[+*}][^()]*\)\s*[+*]|\((?:\?:)?\|[^()]*\|[^()]*\)\s*[+*]|\(\.\*\)\s*[+*]|\(\.\+\)\s*[+*]/;
+
+/**
+ * Compiles an owner-supplied pattern, returning undefined when it is unsafe or
+ * malformed. Callers fall back to a plain string check.
+ */
+function compileSafePattern(
+  pattern: string,
+): RegExp | undefined {
+  if (pattern.length > 200) return undefined;
+  if (CATASTROPHIC_PATTERN.test(pattern)) return undefined;
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Zod schema for a text answer: bounded length, safe optional regex.
+ * The upper bound also caps how much text a custom pattern has to scan.
+ */
+function buildTextValidator(rules?: ValidationRules): z.ZodTypeAny {
+  const max = Math.min(rules?.maxLength ?? REGEX_INPUT_MAX, REGEX_INPUT_MAX);
+  let s = z.string().max(max);
+  if (rules?.minLength !== undefined) s = s.min(rules.minLength);
+  if (rules?.pattern) {
+    const re = compileSafePattern(rules.pattern);
+    if (re) s = s.regex(re);
+  }
+  return s;
+}
+
 // ─── Dynamic Response Schema (core trick) ─────────────────
 
 /**
@@ -297,14 +370,7 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
   switch (field.type) {
     case "short_text":
     case "long_text": {
-      let s = z.string();
-      if (field.validationRules?.minLength !== undefined)
-        s = s.min(field.validationRules.minLength);
-      if (field.validationRules?.maxLength !== undefined)
-        s = s.max(field.validationRules.maxLength);
-      if (field.validationRules?.pattern)
-        s = s.regex(new RegExp(field.validationRules.pattern));
-      validator = s;
+      validator = buildTextValidator(field.validationRules);
       break;
     }
 
@@ -391,13 +457,7 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
     }
 
     case "file_upload":
-      validator = z.object({
-        fileId: z.string().uuid(),
-        name: z.string(),
-        size: z.number().int().nonnegative(),
-        mimeType: z.string(),
-        url: z.string(),
-      });
+      validator = FileAnswerValueSchema;
       break;
 
     case "payment":

@@ -98,13 +98,12 @@ export const paymentRouter = router({
             message: "This form is password protected",
           });
         }
-        if (!verifyPassword(input.password, stored)) {
+        if (!(await verifyPassword(input.password, stored))) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Incorrect password",
           });
-        }
-      }
+        }      }
 
       const { fields } = await getFieldsForForm(published.id);
       const field = fields.find(
