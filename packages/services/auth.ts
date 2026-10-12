@@ -31,6 +31,10 @@ export const auth = betterAuth({
     .filter(Boolean),
   emailAndPassword: {
     enabled: true,
+    // Bound the password length so a huge value cannot be used to stall
+    // password hashing, and set an explicit floor for new accounts.
+    minPasswordLength: 8,
+    maxPasswordLength: 128,
   },
   user: {
     additionalFields: {
@@ -73,6 +77,9 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // 1 day
   },
   advanced: {
+    // Secure cookies follow the public origin: forced on for https deployments,
+    // off for plain-http localhost so local development still works.
+    useSecureCookies: env.BETTER_AUTH_URL.startsWith("https://"),
     database: {
       // use real uuid v4 ids so they fit our `uuid` columns cleanly
       generateId: () => randomUUID(),

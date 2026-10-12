@@ -12,8 +12,18 @@ import { authHandler } from "@repo/services/auth";
 import { env } from "./env";
 import { uploadsRouter } from "./uploads";
 import { paymentsRouter } from "./payments";
+import { securityHeaders, enforceTrustedOrigin } from "./security";
 
 export const app = express();
+
+// Behind a reverse proxy (Fly/Railway/Vercel/nginx) `req.ip` must reflect the
+// real client or every IP-based rate limit keys off the proxy's own address.
+// Only trust the forwarded header when the deployment actually sits behind one.
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", process.env.TRUST_PROXY);
+}
+app.disable("x-powered-by");
+
 const openApiDocument = generateOpenApiDocument(serverRouter, {
   title: "Formly OpenAPI",
   version: "1.0.0",
@@ -25,6 +35,9 @@ const openApiDocument = generateOpenApiDocument(serverRouter, {
 const allowedOrigins = env.FRONTEND_URL.split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+
+app.use(securityHeaders);
+app.use(enforceTrustedOrigin(allowedOrigins));
 
 app.use(
   cors({
@@ -43,6 +56,8 @@ app.use("/auth", authHandler);
 
 app.use(
   express.json({
+    // Bound request bodies so a single client cannot exhaust memory.
+    limit: "1mb",
     verify: (req, _res, buf) => {
       // Keep the raw request body for signed webhooks (Razorpay signatures
       // are computed over the exact bytes sent).

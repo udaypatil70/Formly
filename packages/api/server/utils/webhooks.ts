@@ -5,6 +5,7 @@ import {
   type SelectForm,
 } from "@repo/db/schema";
 import type { Field } from "@repo/validators";
+import { assertPublicHttpUrl } from "./ssrf";
 
 function formatAnswerValue(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -35,6 +36,9 @@ async function deliver(
   payload: unknown,
 ): Promise<DeliverResult> {
   try {
+    // Re-check on every delivery: the stored URL was validated at create time,
+    // but DNS can change and the host may no longer be public.
+    const target = await assertPublicHttpUrl(url);
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -47,11 +51,13 @@ async function deliver(
       headers["x-formly-signature"] = `sha256=${signature}`;
     }
 
-    const response = await fetch(url, {
+    const response = await fetch(target, {
       method: "POST",
       headers,
       body,
       signal: AbortSignal.timeout(10_000),
+      // A redirect could point at an internal host that just passed the check.
+      redirect: "error",
     });
 
     if (!response.ok) {

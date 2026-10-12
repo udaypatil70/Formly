@@ -5,6 +5,7 @@ import { formWebhooksTable } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../../trpc";
 import { assertFormOwner } from "../form/route";
+import { assertPublicHttpUrl, SsrfBlockedError } from "../../utils/ssrf";
 
 const TAGS = ["Webhooks"];
 
@@ -56,6 +57,25 @@ const serialize = (row: typeof formWebhooksTable.$inferSelect) => ({
     : null,
 });
 
+/**
+ * Rejects webhook targets that point at the server's own network before the
+ * URL is persisted, so a stored hook can never be used to probe internal
+ * services.
+ */
+async function assertWebhookUrlAllowed(rawUrl: string): Promise<void> {
+  try {
+    await assertPublicHttpUrl(rawUrl);
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: error.message,
+      });
+    }
+    throw error;
+  }
+}
+
 export const webhookRouter = router({
   /** List webhooks configured for a form. */
   list: protectedProcedure
@@ -80,6 +100,7 @@ export const webhookRouter = router({
     .output(webhookOutput)
     .mutation(async ({ ctx, input }) => {
       await assertFormOwner(input.formId, ctx.user.id);
+      await assertWebhookUrlAllowed(input.url);
       const inserted = await db
         .insert(formWebhooksTable)
         .values({
@@ -111,6 +132,10 @@ export const webhookRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Webhook not found" });
       }
       await assertFormOwner(hook.formId, ctx.user.id);
+
+      if (input.url !== undefined) {
+        await assertWebhookUrlAllowed(input.url);
+      }
 
       const updated = await db
         .update(formWebhooksTable)
@@ -196,12 +221,23 @@ export const webhookRouter = router({
         headers["x-formly-signature"] = `sha256=${signature}`;
       }
 
+      let target: URL;
       try {
-        const response = await fetch(hook.url, {
+        target = await assertPublicHttpUrl(hook.url);
+      } catch (error) {
+        if (error instanceof SsrfBlockedError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        throw error;
+      }
+
+      try {
+        const response = await fetch(target, {
           method: "POST",
           headers,
           body: payload,
           signal: AbortSignal.timeout(10_000),
+          redirect: "error",
         });
         return {
           ok: response.ok,

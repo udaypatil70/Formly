@@ -147,7 +147,7 @@ export const formRouter = router({
                 ? {
                     ...input.settings,
                     password: input.settings.password
-                      ? hashPassword(input.settings.password)
+                      ? await hashPassword(input.settings.password)
                       : undefined,
                   }
                 : {},
@@ -317,7 +317,9 @@ export const formRouter = router({
       const baseSettings = input.settings ?? form.settings;
       const nextSettings = { ...(baseSettings ?? {}) };
       if (nextSettings.password) {
-        nextSettings.password = hashPassword(nextSettings.password as string);
+        nextSettings.password = await hashPassword(
+          nextSettings.password as string,
+        );
       }
 
       const updated = await db

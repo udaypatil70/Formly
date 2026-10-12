@@ -16,9 +16,12 @@ export interface RateLimitResult {
 
 /**
  * Postgres-backed sliding-window rate limiter backed by `rate_limit_log`.
- * Each request appends a row keyed by `key`; the request is allowed only if
- * the number of rows within the window stays at or below `limit`.
- * Stale rows are pruned opportunistically on each call.
+ *
+ * The hit is recorded *before* the window is counted, so the count always
+ * includes the current request. A plain count-then-insert check let concurrent
+ * requests all observe "under the limit" and sail through; counting our own
+ * row closes that window. A rejected request removes its own row again so it
+ * never extends the window for everyone else.
  */
 export async function rateLimit(
   key: string,
@@ -26,10 +29,17 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const now = new Date();
   const windowStart = new Date(now.getTime() - windowMs);
+  const id = randomUUID();
 
+  // Served by rate_limit_log_hits_at_idx, so this stays cheap as the table grows.
   await db
     .delete(rateLimitLogTable)
     .where(lt(rateLimitLogTable.hitsAt, windowStart))
+    .execute();
+
+  await db
+    .insert(rateLimitLogTable)
+    .values({ id, key, hitsAt: now })
     .execute();
 
   const [row] = await db
@@ -45,14 +55,33 @@ export async function rateLimit(
 
   const total = Number(row?.total ?? 0);
 
-  if (total >= limit) {
-    return { limited: true, retryAfterMs: windowMs };
-  }
+  if (total > limit) {
+    // Give this slot back so a blocked caller does not lengthen the window.
+    await db
+      .delete(rateLimitLogTable)
+      .where(eq(rateLimitLogTable.id, id))
+      .execute();
 
-  await db
-    .insert(rateLimitLogTable)
-    .values({ id: randomUUID(), key, hitsAt: now })
-    .execute();
+    const [oldest] = await db
+      .select({ hitsAt: rateLimitLogTable.hitsAt })
+      .from(rateLimitLogTable)
+      .where(
+        and(
+          eq(rateLimitLogTable.key, key),
+          gte(rateLimitLogTable.hitsAt, windowStart),
+        ),
+      )
+      .orderBy(rateLimitLogTable.hitsAt)
+      .limit(1)
+      .execute();
+
+    // Wait until the oldest hit in the window ages out of it.
+    const retryAfterMs = oldest
+      ? Math.max(0, oldest.hitsAt.getTime() + windowMs - Date.now())
+      : windowMs;
+
+    return { limited: true, retryAfterMs };
+  }
 
   return { limited: false, retryAfterMs: 0 };
 }
