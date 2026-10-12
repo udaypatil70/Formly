@@ -98,7 +98,7 @@ function parseIpv6(address: string): number[] | null {
     return out;
   };
 
-  const left = toGroups(head);
+  const left = toGroups(head ?? "");
   const right = tail === undefined ? [] : toGroups(tail);
   if (!left || !right) return null;
 
