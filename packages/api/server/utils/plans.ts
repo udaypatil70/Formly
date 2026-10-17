@@ -148,6 +148,24 @@ export function planAllowsFeature(
   return entitlements[feature] === true;
 }
 
+/** Conditional logic is only "on" when it carries at least one real rule. */
+export function hasConditionalLogic(
+  logic: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!logic) return false;
+  if (logic.showIf) return true;
+  if (Array.isArray(logic.groups) && logic.groups.length > 0) return true;
+  if (logic.gotoPageId) return true;
+  return logic.gotoSubmit === true;
+}
+
+/** Anything other than the single-page default counts as a multi-page form. */
+export function isMultiPage(
+  stepMode: string | null | undefined,
+): boolean {
+  return Boolean(stepMode) && stepMode !== "all";
+}
+
 /** `YYYY-MM` billing period for the current month, in UTC. */
 export function currentPeriod(now: Date = new Date()): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;

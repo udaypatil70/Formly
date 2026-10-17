@@ -26,6 +26,8 @@ import { serializeForm, serializeTheme } from "../../utils/serialize";
 import {
   assertFormQuota,
   getUserEntitlements,
+  hasConditionalLogic,
+  isMultiPage,
   planAllowsFeature,
 } from "../../utils/plans";
 import {
@@ -155,6 +157,12 @@ export const formRouter = router({
       }
       if (input.settings?.notifyOnResponse) {
         await assertFeature(ctx.user.id, "emailNotifications");
+      }
+      if (
+        isMultiPage(input.settings?.stepMode) ||
+        input.fields?.some((field) => hasConditionalLogic(field.conditionalLogic))
+      ) {
+        await assertFeature(ctx.user.id, "multiPageAndLogic");
       }
 
       const slug = input.slug?.trim().length
@@ -357,6 +365,12 @@ export const formRouter = router({
       // an existing allowance stays available after a downgrade.
       if (nextSettings.notifyOnResponse && !form.settings?.notifyOnResponse) {
         await assertFeature(ctx.user.id, "emailNotifications");
+      }
+
+      // Same for multi-page: only the transition into it is gated, so forms
+      // that already use page breaks survive a downgrade to Free.
+      if (isMultiPage(nextSettings.stepMode) && !isMultiPage(form.settings?.stepMode)) {
+        await assertFeature(ctx.user.id, "multiPageAndLogic");
       }
 
       const updated = await db
