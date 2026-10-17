@@ -32,6 +32,7 @@ import { parseUserAgent } from "../../utils/ua";
 import { verifyPassword } from "../../utils/password";
 import { notifyNewResponse } from "../../utils/notifications";
 import { triggerWebhooks } from "../../utils/webhooks";
+import { consumeResponseQuota, getUserEntitlements } from "../../utils/plans";
 import {
   razorpayConfigured,
   verifyRazorpaySignature,
@@ -695,8 +696,17 @@ export const publicRouter = router({
         }
       }
 
+      const ownerEntitlements = (
+        await getUserEntitlements(form.ownerId)
+      ).entitlements;
+
       const responseId = await db.transaction(async (tx) => {
         const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
+
+        // Counted inside the transaction so a later failure (e.g. a payment
+        // constraint) rolls the counter back along with the response.
+        await consumeResponseQuota(tx, form.ownerId, ownerEntitlements);
+
         const inserted = await tx
           .insert(responsesTable)
           .values({
