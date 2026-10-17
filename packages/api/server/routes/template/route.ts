@@ -7,7 +7,13 @@ import { getFieldsForForm } from "../../utils/form";
 import { ensureUniqueSlug } from "../../utils/slug";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import { fieldOutput, formMetaOutput, themeOutput } from "../../utils/schemas";
-import { assertFormQuota, getUserEntitlements } from "../../utils/plans";
+import {
+  assertFormQuota,
+  getUserEntitlements,
+  hasConditionalLogic,
+  isMultiPage,
+  planAllowsFeature,
+} from "../../utils/plans";
 import { insertFields, type DB } from "../form/route";
 
 const TAGS = ["Templates"];
@@ -204,6 +210,23 @@ export const templateRouter = router({
         confirmationEmailFieldId: _confirmationEmailFieldId,
         ...safeSettings
       } = settings;
+
+      // Templates that branch or paginate hand out a paid capability, so they
+      // inherit the plan's multi-page/logic gate. Simple templates stay usable.
+      const { fields } = await getFieldsForForm(template.id);
+      const needsLogicEntitlement =
+        isMultiPage(safeSettings.stepMode) ||
+        fields.some((field) => hasConditionalLogic(field.conditionalLogic));
+      if (
+        needsLogicEntitlement &&
+        !planAllowsFeature(entitlements, "multiPageAndLogic")
+      ) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message:
+            "This template uses conditional logic or multi-page steps, which is not included in your plan.",
+        });
+      }
 
       return db.transaction(async (tx) => {
         const newSlug = await ensureUniqueSlug(template.slug);

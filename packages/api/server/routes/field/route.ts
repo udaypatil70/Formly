@@ -14,8 +14,25 @@ import { router, protectedProcedure } from "../../trpc";
 import { getFormBy } from "../../utils/form";
 import { assertFormOwner } from "../form/route";
 import { fieldOutput } from "../../utils/schemas";
+import {
+  getUserEntitlements,
+  hasConditionalLogic,
+  planAllowsFeature,
+} from "../../utils/plans";
 
 const TAGS = ["Fields"];
+
+/** Throws PAYMENT_REQUIRED unless the caller's plan allows conditional logic. */
+async function assertLogicAllowed(userId: string) {
+  const { entitlements } = await getUserEntitlements(userId);
+  if (!planAllowsFeature(entitlements, "multiPageAndLogic")) {
+    throw new TRPCError({
+      code: "PAYMENT_REQUIRED",
+      message:
+        "Conditional logic is not included in your plan.",
+    });
+  }
+}
 
 const addInput = z.object({
   formId: z.string().uuid(),
@@ -38,6 +55,9 @@ export const fieldRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { formId, ...field } = input;
       await assertFormOwner(formId, ctx.user.id);
+      if (hasConditionalLogic(field.conditionalLogic)) {
+        await assertLogicAllowed(ctx.user.id);
+      }
 
       const inserted = await db.transaction(async (tx) => {
         const created = await tx
@@ -104,6 +124,16 @@ export const fieldRouter = router({
       const form = await getFormBy(eq(formsTable.id, fieldRow.formId));
       if (form.ownerId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Not your form" });
+      }
+
+      // Only the transition into conditional logic is gated, so existing rules
+      // stay editable after a downgrade.
+      if (
+        input.conditionalLogic !== undefined &&
+        hasConditionalLogic(input.conditionalLogic) &&
+        !hasConditionalLogic(fieldRow.conditionalLogic)
+      ) {
+        await assertLogicAllowed(ctx.user.id);
       }
 
       const updated = await db.transaction(async (tx) => {

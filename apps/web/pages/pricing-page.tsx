@@ -5,14 +5,13 @@ import {
   CheckIcon,
   MinusIcon,
   SparklesIcon,
-  Building2Icon,
-  RocketIcon,
   HelpCircleIcon,
 } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   Accordion,
   AccordionContent,
@@ -20,104 +19,9 @@ import {
   AccordionTrigger,
 } from "~/components/ui/accordion";
 import { cn } from "~/lib/utils";
+import { billingCaption, usePlanCatalogue, type Billing } from "~/lib/plans";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
-
-type Billing = "monthly" | "yearly";
-
-const PRICES = {
-  free: { monthly: 0, yearly: 0 },
-  pro: { monthly: 10, yearly: 8 },
-  enterprise: { monthly: null, yearly: null },
-};
-
-interface Tier {
-  name: string;
-  tagline: string;
-  icon: typeof RocketIcon;
-  highlight?: boolean;
-  priceLabel: string;
-  cta: string;
-  ctaHref: string;
-  features: string[];
-}
-
-const FREE_TIER: Tier = {
-  name: "Free",
-  tagline: "For side projects and first forms",
-  icon: SparklesIcon,
-  priceLabel: "$0",
-  cta: "Start for free",
-  ctaHref: "/login",
-  features: [
-    "3 active forms",
-    "100 responses / month",
-    "1 branded theme",
-    "Password & expiry protection",
-    "CSV export",
-    "Bot protection",
-  ],
-};
-
-function proTier(billing: Billing): Tier {
-  return {
-    name: "Pro",
-    tagline: "For creators and growing teams",
-    icon: RocketIcon,
-    highlight: true,
-    priceLabel: `$${PRICES.pro[billing]}`,
-    cta: "Start free trial",
-    ctaHref: "/login",
-    features: [
-      "Unlimited forms & responses",
-      "All 50+ branded themes",
-      "Conditional logic & multi-page forms",
-      "Real-time analytics dashboard",
-      "Email notifications",
-      "Embed anywhere + custom slug",
-      "Priority support",
-    ],
-  };
-}
-
-const ENTERPRISE_TIER: Tier = {
-  name: "Enterprise",
-  tagline: "For organizations at scale",
-  icon: Building2Icon,
-  priceLabel: "Custom",
-  cta: "Contact sales",
-  ctaHref: "/login",
-  features: [
-    "Everything in Pro",
-    "SSO / SAML authentication",
-    "Custom domain",
-    "Audit logs & data retention",
-    "Dedicated success manager",
-    "99.9% uptime SLA",
-  ],
-};
-
-interface ComparisonRow {
-  label: string;
-  values: (string | boolean)[];
-}
-
-const COMPARISON_ROWS: ComparisonRow[] = [
-  { label: "Active forms", values: ["3", "Unlimited", "Unlimited"] },
-  { label: "Responses per month", values: ["100", "Unlimited", "Unlimited"] },
-  { label: "Branded themes", values: ["1", "50+", "50+"] },
-  { label: "Multi-page & conditional logic", values: [false, true, true] },
-  { label: "Analytics dashboard", values: [false, true, true] },
-  { label: "Email notifications", values: [false, true, true] },
-  { label: "Bot protection (Turnstile)", values: [true, true, true] },
-  { label: "CSV export", values: [true, true, true] },
-  { label: "Password & expiry protection", values: [true, true, true] },
-  { label: "Embed anywhere", values: [false, true, true] },
-  { label: "Custom domain", values: [false, false, true] },
-  { label: "SSO / SAML", values: [false, false, true] },
-  { label: "Priority support", values: [false, true, true] },
-  { label: "Uptime SLA + audit logs", values: [false, false, true] },
-];
 
 const FAQS = [
   {
@@ -154,7 +58,8 @@ const FAQS = [
 
 export function PricingPage() {
   const [billing, setBilling] = useState<Billing>("yearly");
-  const tiers = [FREE_TIER, proTier(billing), ENTERPRISE_TIER];
+  const { plans, comparisonRows, isLoading, isError } =
+    usePlanCatalogue(billing);
 
   return (
     <div className="min-h-svh bg-background">
@@ -213,78 +118,86 @@ export function PricingPage() {
 
       {/* Tiers */}
       <section className="mx-auto w-full max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="mt-10 grid gap-5 lg:grid-cols-3">
-          {tiers.map((tier) => (
-            <Card
-              key={tier.name}
-              className={cn(
-                "relative flex flex-col p-6",
-                tier.highlight
-                  ? "border-violet-500/40 bg-gradient-to-b from-violet-950/40 to-white/[0.02] shadow-xl shadow-violet-500/10"
-                  : "border-border/60 bg-white/[0.02]",
-              )}
-            >
-              {tier.highlight && (
-                <Badge className="bg-violet-600 text-white shadow-lg shadow-violet-600/30">
-                  Most popular
-                </Badge>
-              )}
-              <span
-                className={cn(
-                  "mt-4 flex size-11 items-center justify-center rounded-xl border [&>svg]:size-5",
-                  tier.highlight
-                    ? "border-violet-500/30 bg-violet-500/15 text-violet-300"
-                    : "border-border/60 bg-white/[0.04] text-muted-foreground",
-                )}
-              >
-                <tier.icon />
-              </span>
-              <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
-              <p className="text-muted-foreground text-sm">{tier.tagline}</p>
-              <div className="mt-5 flex items-baseline gap-1">
-                <span className="text-4xl font-semibold tracking-tight">
-                  {tier.priceLabel}
-                </span>
-                {tier.priceLabel !== "Custom" && (
-                  <span className="text-muted-foreground text-sm">
-                    / month
-                  </span>
-                )}
-              </div>
-              <p className="text-muted-foreground mt-1 h-4 text-xs">
-                {billing === "yearly" && tier.priceLabel !== "Custom" && tier.priceLabel !== "$0"
-                  ? "billed annually"
-                  : tier.priceLabel === "$0"
-                    ? "free forever"
-                    : ""}
-              </p>
-              <Button
-                asChild
-                className={cn(
-                  "mt-6 w-full",
-                  tier.highlight
-                    ? "bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500"
-                    : tier.name === "Enterprise"
-                      ? "bg-white text-zinc-900 hover:bg-white/90"
-                      : "border-border/60 bg-white/5 backdrop-blur hover:bg-white/10",
-                )}
-              >
-                <Link to={tier.ctaHref}>
-                  {tier.cta}
-                  <ArrowRightIcon />
-                </Link>
-              </Button>
-              <ul className="mt-7 space-y-3">
-                {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm">
-                    <CheckIcon className="text-emerald-400 mt-0.5 size-4 shrink-0" />
-                    <span className="text-muted-foreground">{feature}</span>
-                  </li>
+        {isError ? (
+          <p className="text-muted-foreground mt-10 text-center text-sm">
+            Pricing is temporarily unavailable. Please try again shortly.
+          </p>
+        ) : (
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {isLoading
+              ? Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-[26rem] rounded-2xl" />
+                ))
+              : plans.map((tier) => (
+                  <Card
+                    key={tier.key}
+                    className={cn(
+                      "relative flex flex-col p-6",
+                      tier.highlight
+                        ? "border-violet-500/40 bg-gradient-to-b from-violet-950/40 to-white/[0.02] shadow-xl shadow-violet-500/10"
+                        : "border-border/60 bg-white/[0.02]",
+                    )}
+                  >
+                    {tier.highlight && (
+                      <Badge className="bg-violet-600 text-white shadow-lg shadow-violet-600/30">
+                        Most popular
+                      </Badge>
+                    )}
+                    <span
+                      className={cn(
+                        "mt-4 flex size-11 items-center justify-center rounded-xl border [&>svg]:size-5",
+                        tier.highlight
+                          ? "border-violet-500/30 bg-violet-500/15 text-violet-300"
+                          : "border-border/60 bg-white/[0.04] text-muted-foreground",
+                      )}
+                    >
+                      <tier.icon />
+                    </span>
+                    <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {tier.tagline}
+                    </p>
+                    <div className="mt-5 flex items-baseline gap-1">
+                      <span className="text-4xl font-semibold tracking-tight">
+                        {tier.priceLabel}
+                      </span>
+                      {tier.priceLabel !== "Custom" && (
+                        <span className="text-muted-foreground text-sm">
+                          / month
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground mt-1 h-4 text-xs">
+                      {billingCaption(tier, billing)}
+                    </p>
+                    <Button
+                      asChild
+                      className={cn(
+                        "mt-6 w-full",
+                        tier.highlight
+                          ? "bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500"
+                          : tier.key === "enterprise"
+                            ? "bg-white text-zinc-900 hover:bg-white/90"
+                            : "border-border/60 bg-white/5 backdrop-blur hover:bg-white/10",
+                      )}
+                    >
+                      <Link to="/login">
+                        {tier.cta}
+                        <ArrowRightIcon />
+                      </Link>
+                    </Button>
+                    <ul className="mt-7 space-y-3">
+                      {tier.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2.5 text-sm">
+                          <CheckIcon className="text-emerald-400 mt-0.5 size-4 shrink-0" />
+                          <span className="text-muted-foreground">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
                 ))}
-              </ul>
-            </Card>
-          ))}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* Comparison table */}
@@ -299,59 +212,63 @@ export function PricingPage() {
             </p>
           </div>
 
-          <div className="mt-12 overflow-x-auto rounded-2xl border border-border/60 bg-white/[0.02]">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border/60">
-                  <th className="px-6 py-4 text-left font-semibold">Features</th>
-                  {["Free", "Pro", "Enterprise"].map((name) => (
-                    <th
-                      key={name}
-                      className={cn(
-                        "px-6 py-4 text-center text-base font-semibold",
-                        name === "Pro" && "text-violet-300",
-                      )}
-                    >
-                      {name}
-                      {name === "Pro" && (
-                        <div className="text-muted-foreground mt-0.5 text-xs font-normal">
-                          $8/mo billed yearly
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON_ROWS.map((row, index) => (
-                  <tr
-                    key={row.label}
-                    className={cn(
-                      "border-b border-border/40 last:border-0",
-                      index % 2 === 0 && "bg-white/[0.015]",
-                    )}
-                  >
-                    <td className="px-6 py-3.5 text-muted-foreground">
-                      {row.label}
-                    </td>
-                    {row.values.map((value, column) => (
-                      <td key={column} className="px-6 py-3.5 text-center">
-                        {typeof value === "boolean" ? (
-                          value ? (
-                            <CheckIcon className="text-emerald-400 mx-auto size-4.5" />
-                          ) : (
-                            <MinusIcon className="text-muted-foreground/40 mx-auto size-4.5" />
-                          )
-                        ) : (
-                          <span className="font-medium">{value}</span>
+          {isLoading ? (
+            <Skeleton className="mt-12 h-96 rounded-2xl" />
+          ) : (
+            <div className="mt-12 overflow-x-auto rounded-2xl border border-border/60 bg-white/[0.02]">
+              <table className="w-full min-w-[720px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border/60">
+                    <th className="px-6 py-4 text-left font-semibold">Features</th>
+                    {plans.map((tier) => (
+                      <th
+                        key={tier.key}
+                        className={cn(
+                          "px-6 py-4 text-center text-base font-semibold",
+                          tier.highlight && "text-violet-300",
                         )}
-                      </td>
+                      >
+                        {tier.name}
+                        {tier.highlight && (
+                          <div className="text-muted-foreground mt-0.5 text-xs font-normal">
+                            {tier.priceLabel}/mo billed yearly
+                          </div>
+                        )}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {comparisonRows.map((row, index) => (
+                    <tr
+                      key={row.label}
+                      className={cn(
+                        "border-b border-border/40 last:border-0",
+                        index % 2 === 0 && "bg-white/[0.015]",
+                      )}
+                    >
+                      <td className="text-muted-foreground px-6 py-3.5">
+                        {row.label}
+                      </td>
+                      {row.values.map((value, column) => (
+                        <td key={column} className="px-6 py-3.5 text-center">
+                          {typeof value === "boolean" ? (
+                            value ? (
+                              <CheckIcon className="text-emerald-400 mx-auto size-4.5" />
+                            ) : (
+                              <MinusIcon className="text-muted-foreground/40 mx-auto size-4.5" />
+                            )
+                          ) : (
+                            <span className="font-medium">{value}</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 

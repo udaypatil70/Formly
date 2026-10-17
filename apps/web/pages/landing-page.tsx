@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import {
   ArrowRightIcon,
   BarChart3Icon,
-  Building2Icon,
   CheckIcon,
   Code2Icon,
   FileDownIcon,
@@ -26,6 +25,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import { billingCaption, usePlanCatalogue, type Billing } from "~/lib/plans";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
 
@@ -175,67 +175,10 @@ const TESTIMONIALS = [
   },
 ];
 
-type Billing = "monthly" | "yearly";
-
-const PRO_PRICES = { monthly: 10, yearly: 8 };
-
-interface LandingTier {
-  name: string;
-  tagline: string;
-  icon: typeof SparklesIcon;
-  highlight?: boolean;
-  price: number | null;
-  cta: string;
-  features: string[];
-}
-
-const LANDING_TIERS: Omit<LandingTier, "price">[] = [
-  {
-    name: "Free",
-    tagline: "For side projects and first forms",
-    icon: SparklesIcon,
-    cta: "Start for free",
-    features: [
-      "3 active forms",
-      "100 responses / month",
-      "1 branded theme",
-      "Password & expiry protection",
-      "CSV export",
-    ],
-  },
-  {
-    name: "Pro",
-    tagline: "For creators and growing teams",
-    icon: RocketIcon,
-    highlight: true,
-    cta: "Start free trial",
-    features: [
-      "Unlimited forms & responses",
-      "All 50+ branded themes",
-      "Conditional logic & multi-page forms",
-      "Real-time analytics dashboard",
-      "Email notifications + webhooks",
-      "Embed anywhere + custom slug",
-    ],
-  },
-  {
-    name: "Enterprise",
-    tagline: "For organizations at scale",
-    icon: Building2Icon,
-    cta: "Contact sales",
-    features: [
-      "Everything in Pro",
-      "SSO / SAML authentication",
-      "Custom domain",
-      "Audit logs & data retention",
-      "Dedicated success manager",
-    ],
-  },
-];
-
 export function LandingPage() {
   useScrollToHash();
   const [billing, setBilling] = useState<Billing>("yearly");
+  const { plans } = usePlanCatalogue(billing);
 
   return (
     <div className="min-h-svh bg-background">
@@ -679,11 +622,10 @@ export function LandingPage() {
           </div>
 
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {LANDING_TIERS.map((tier) => {
-              const price = tier.name === "Pro" ? PRO_PRICES[billing] : null;
+            {plans.map((tier) => {
               return (
                 <Card
-                  key={tier.name}
+                  key={tier.key}
                   className={cn(
                     "relative flex flex-col p-6",
                     tier.highlight
@@ -707,25 +649,21 @@ export function LandingPage() {
                     <tier.icon />
                   </span>
                   <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
-                  <p className="text-muted-foreground text-sm">{tier.tagline}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {tier.tagline}
+                  </p>
                   <div className="mt-5 flex items-baseline gap-1">
                     <span className="text-4xl font-semibold tracking-tight">
-                      {price === null ? "Custom" : `$${price}`}
+                      {tier.priceLabel}
                     </span>
-                    {price !== null && (
+                    {tier.priceLabel !== "Custom" && (
                       <span className="text-muted-foreground text-sm">
                         / month
                       </span>
                     )}
                   </div>
                   <p className="text-muted-foreground mt-1 h-4 text-xs">
-                    {tier.name === "Pro" && billing === "yearly"
-                      ? "billed annually"
-                      : tier.name === "Free"
-                        ? "free forever"
-                        : price === null
-                          ? "tailored to your team"
-                          : ""}
+                    {billingCaption(tier, billing)}
                   </p>
                   <Button
                     asChild
@@ -733,7 +671,7 @@ export function LandingPage() {
                       "mt-6 w-full",
                       tier.highlight
                         ? "bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-500"
-                        : tier.name === "Enterprise"
+                        : tier.key === "enterprise"
                           ? "bg-white text-zinc-900 hover:bg-white/90"
                           : "border-border/60 bg-white/5 backdrop-blur hover:bg-white/10",
                     )}
