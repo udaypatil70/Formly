@@ -7,6 +7,7 @@ import { getFieldsForForm } from "../../utils/form";
 import { ensureUniqueSlug } from "../../utils/slug";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import { fieldOutput, formMetaOutput, themeOutput } from "../../utils/schemas";
+import { assertFormQuota, getUserEntitlements } from "../../utils/plans";
 import { insertFields, type DB } from "../form/route";
 
 const TAGS = ["Templates"];
@@ -175,6 +176,11 @@ export const templateRouter = router({
     .input(idInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
+      // Instantiating a template creates a real form, so it draws from the same
+      // allowance as form.create — otherwise the quota is trivially bypassed.
+      const { entitlements } = await getUserEntitlements(ctx.user.id);
+      await assertFormQuota(ctx.user.id, entitlements);
+
       const rows = await db
         .select({ form: formsTable })
         .from(formsTable)

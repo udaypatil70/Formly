@@ -6,6 +6,11 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../../trpc";
 import { assertFormOwner } from "../form/route";
 import { assertPublicHttpUrl, SsrfBlockedError } from "../../utils/ssrf";
+import {
+  assertWebhookQuota,
+  getUserEntitlements,
+  planAllowsFeature,
+} from "../../utils/plans";
 
 const TAGS = ["Webhooks"];
 
@@ -100,6 +105,14 @@ export const webhookRouter = router({
     .output(webhookOutput)
     .mutation(async ({ ctx, input }) => {
       await assertFormOwner(input.formId, ctx.user.id);
+      const { entitlements } = await getUserEntitlements(ctx.user.id);
+      if (!planAllowsFeature(entitlements, "webhooks")) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: "Webhooks are not included in your plan.",
+        });
+      }
+      await assertWebhookQuota(input.formId, entitlements);
       await assertWebhookUrlAllowed(input.url);
       const inserted = await db
         .insert(formWebhooksTable)

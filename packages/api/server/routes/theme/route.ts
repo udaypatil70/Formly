@@ -8,6 +8,7 @@ import {
   themeCreateInput,
   themeUpdateInput,
 } from "../../utils/schemas";
+import { assertThemeQuota, getUserEntitlements } from "../../utils/plans";
 
 const TAGS = ["Themes"];
 
@@ -61,6 +62,8 @@ export const themeRouter = router({
     .input(themeCreateInput)
     .output(themeOutput)
     .mutation(async ({ ctx, input }) => {
+      const { entitlements } = await getUserEntitlements(ctx.user.id);
+      await assertThemeQuota(ctx.user.id, entitlements);
       const created = await db
         .insert(themesTable)
         .values({ ...input, ownerId: ctx.user.id })

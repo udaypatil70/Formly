@@ -7,7 +7,9 @@ import {
   responsesTable,
   formViewsTable,
   formVersionsTable,
+  PLAN_FEATURE_LABELS,
   type FormVersionField,
+  type PlanFeature,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import {
@@ -22,12 +24,31 @@ import { slugify, ensureUniqueSlug, isSlugAvailable } from "../../utils/slug";
 import { hashPassword } from "../../utils/password";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
 import {
+  assertFormQuota,
+  getUserEntitlements,
+  planAllowsFeature,
+} from "../../utils/plans";
+import {
   formDetailOutput,
   formMetaOutput,
   formWithCountsOutput,
 } from "../../utils/schemas";
 
 const TAGS = ["Forms"];
+
+/** Throws PAYMENT_REQUIRED when the caller's plan doesn't grant `feature`. */
+async function assertFeature(
+  userId: string,
+  feature: PlanFeature,
+): Promise<void> {
+  const { entitlements } = await getUserEntitlements(userId);
+  if (!planAllowsFeature(entitlements, feature)) {
+    throw new TRPCError({
+      code: "PAYMENT_REQUIRED",
+      message: `${PLAN_FEATURE_LABELS[feature]} is not included in your plan.`,
+    });
+  }
+}
 
 /** The transaction object type handed to `db.transaction(cb)`. */
 type DB =
@@ -127,6 +148,15 @@ export const formRouter = router({
     .input(createFormInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
+      const { entitlements } = await getUserEntitlements(ctx.user.id);
+      await assertFormQuota(ctx.user.id, entitlements);
+      if (input.customDomain) {
+        await assertFeature(ctx.user.id, "customDomain");
+      }
+      if (input.settings?.notifyOnResponse) {
+        await assertFeature(ctx.user.id, "emailNotifications");
+      }
+
       const slug = input.slug?.trim().length
         ? input.slug
         : slugify(input.title) || "untitled-form";
@@ -294,6 +324,7 @@ export const formRouter = router({
         const raw = input.customDomain?.trim() || "";
         nextCustomDomain = raw ? normalizeDomain(raw) : null;
         if (nextCustomDomain && nextCustomDomain !== form.customDomain) {
+          await assertFeature(ctx.user.id, "customDomain");
           const conflict = await db
             .select({ id: formsTable.id })
             .from(formsTable)
@@ -320,6 +351,12 @@ export const formRouter = router({
         nextSettings.password = await hashPassword(
           nextSettings.password as string,
         );
+      }
+
+      // Turning notifications on is a paid capability; clearing them or editing
+      // an existing allowance stays available after a downgrade.
+      if (nextSettings.notifyOnResponse && !form.settings?.notifyOnResponse) {
+        await assertFeature(ctx.user.id, "emailNotifications");
       }
 
       const updated = await db
