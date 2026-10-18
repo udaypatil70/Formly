@@ -29,6 +29,7 @@ type ShareTarget = {
   title: string;
   slug: string;
   customDomain?: string | null;
+  customDomainStatus?: "pending" | "verified" | "failed" | null;
 } | null;
 
 export function ShareDialog({
@@ -46,8 +47,16 @@ export function ShareDialog({
 
   if (!form) return null;
 
-  const url = form.customDomain
-    ? `https://${form.customDomain}`
+  // Only a domain whose ownership has been proven is shareable. An unverified
+  // domain would hand out a URL that resolves to nothing.
+  const isDomainLive = Boolean(
+    form.customDomain && form.customDomainStatus === "verified",
+  );
+  // Custom domains are served over TLS; fall back to the page's own scheme so
+  // a local http build still produces a usable link.
+  const domainScheme = window.location.protocol === "http:" ? "http:" : "https:";
+  const url = isDomainLive
+    ? `${domainScheme}//${form.customDomain}`
     : `${window.location.origin}/form/${form.slug}`;
   const shareText = `Check out "${form.title}" on Formly`;
   const iframeCode = `<iframe src="${url}" width="100%" height="640" style="border:0;border-radius:12px" loading="lazy" allowfullscreen></iframe>`;
@@ -112,6 +121,13 @@ export function ShareDialog({
             Share this link anywhere, or grab a QR code your audience can scan.
           </DialogDescription>
         </DialogHeader>
+
+        {form.customDomain && !isDomainLive ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            {form.customDomain} is not verified yet, so the link below still uses
+            your Formly address. Finish DNS verification to switch over.
+          </p>
+        ) : null}
 
         <div className="flex items-center gap-2">
           <Input readOnly value={url} className="font-mono text-xs" />

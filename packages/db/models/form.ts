@@ -26,6 +26,33 @@ export const formVisibilityEnum = pgEnum("form_visibility", [
   "unlisted",
 ]);
 
+/**
+ * Verification state of `forms.custom_domain`. `public.resolveDomain` only
+ * serves a form whose domain is `verified`, so a domain can never be hijacked
+ * by writing the column directly.
+ */
+export const domainStatusEnum = pgEnum("domain_status", [
+  "pending",
+  "verified",
+  "failed",
+]);
+
+/**
+ * Categories a form template can be filed under. Shared with the frontend
+ * through `@repo/validators` so the picker and the API cannot disagree.
+ */
+export const templateCategoryEnum = pgEnum("template_category", [
+  "feedback",
+  "sales",
+  "education",
+  "health",
+  "events",
+  "product",
+  "careers",
+  "community",
+  "it",
+]);
+
 export const fieldTypeEnum = pgEnum("field_type", [
   "short_text",
   "long_text",
@@ -78,12 +105,20 @@ export const formsTable = pgTable(
     slug: varchar("slug", { length: 255 }).notNull().unique(),
     /** Apex/vhost served by the frontend that resolves straight to this form. */
     customDomain: varchar("custom_domain", { length: 255 }).unique(),
+    /**
+     * Only a `verified` domain is served. Defaults to `pending` so an unverified
+     * claim can never be live.
+     */
+    customDomainStatus: domainStatusEnum("custom_domain_status")
+      .default("pending")
+      .notNull(),
+    customDomainVerifiedAt: timestamp("custom_domain_verified_at"),
     status: formStatusEnum("status").default("draft").notNull(),
     visibility: formVisibilityEnum("visibility").default("public").notNull(),
     archived: boolean("archived").default(false).notNull(),
     isFeatured: boolean("is_featured").default(false).notNull(),
     isTemplate: boolean("is_template").default(false).notNull(),
-    templateCategory: varchar("template_category", { length: 50 }),
+    templateCategory: templateCategoryEnum("template_category"),
     themeId: uuid("theme_id").references(() => themesTable.id, {
       onDelete: "set null",
     }),
@@ -119,6 +154,37 @@ export const formsTable = pgTable(
     index("forms_owner_id_idx").on(table.ownerId),
     index("forms_status_idx").on(table.status),
     index("forms_slug_idx").on(table.slug),
+    index("forms_custom_domain_status_idx").on(table.customDomainStatus),
+  ],
+);
+
+// ─── Custom Domain Verification ──────────────────────────
+// One live challenge per form. Holds the secret token the owner must publish in
+// DNS before `forms.custom_domain_status` flips to `verified`. Re-requesting
+// rotates the token, which is what invalidates an old challenge.
+
+export const domainVerificationsTable = pgTable(
+  "domain_verifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => formsTable.id, { onDelete: "cascade" })
+      .unique(),
+    domain: varchar("domain", { length: 255 }).notNull(),
+    token: varchar("token", { length: 64 }).notNull(),
+    status: domainStatusEnum("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    lastCheckedAt: timestamp("last_checked_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    verifiedAt: timestamp("verified_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("domain_verifications_domain_idx").on(table.domain),
+    index("domain_verifications_status_idx").on(table.status),
   ],
 );
 
@@ -504,6 +570,10 @@ export type SelectFormPayment = typeof formPaymentsTable.$inferSelect;
 export type InsertFormPayment = typeof formPaymentsTable.$inferInsert;
 export type SelectFormVersion = typeof formVersionsTable.$inferSelect;
 export type InsertFormVersion = typeof formVersionsTable.$inferInsert;
+export type SelectDomainVerification =
+  typeof domainVerificationsTable.$inferSelect;
+export type InsertDomainVerification =
+  typeof domainVerificationsTable.$inferInsert;
 export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;
 export type InsertFormWebhook = typeof formWebhooksTable.$inferInsert;
 export type SelectFormFileUpload = typeof formFileUploadsTable.$inferSelect;

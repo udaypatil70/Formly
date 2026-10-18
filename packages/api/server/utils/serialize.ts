@@ -15,6 +15,9 @@ export function serializeForm(
     ...form,
     description: form.description ?? null,
     themeId: form.themeId ?? null,
+    customDomainVerifiedAt: form.customDomainVerifiedAt
+      ? form.customDomainVerifiedAt.toISOString()
+      : null,
     settings: settings ?? {},
     createdAt: form.createdAt.toISOString(),
     updatedAt: form.updatedAt ? form.updatedAt.toISOString() : null,

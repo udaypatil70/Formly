@@ -8,18 +8,12 @@ import {
   formViewsTable,
   formVersionsTable,
   PLAN_FEATURE_LABELS,
-  type FormVersionField,
   type PlanFeature,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
-import {
-  CreateFormInput,
-  UpdateFormInput,
-  type CreateFieldInput,
-  type Field,
-} from "@repo/validators";
+import { CreateFormInput, UpdateFormInput } from "@repo/validators";
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
-import { getFormBy, getTheme, getValidatorFields, normalizeDomain } from "../../utils/form";
+import { getFormBy, getTheme, getValidatorFields } from "../../utils/form";
 import { slugify, ensureUniqueSlug, isSlugAvailable } from "../../utils/slug";
 import { hashPassword } from "../../utils/password";
 import { serializeForm, serializeTheme } from "../../utils/serialize";
@@ -35,8 +29,14 @@ import {
   formMetaOutput,
   formWithCountsOutput,
 } from "../../utils/schemas";
+import { domainProcedures, parseDomain } from "./domains";
+import { DB, assertFormOwner, insertFields, toVersionField } from "./shared";
 
 const TAGS = ["Forms"];
+
+// Re-exported so existing callers keep importing from the router module.
+export { assertFormOwner, insertFields };
+export type { DB };
 
 /** Throws PAYMENT_REQUIRED when the caller's plan doesn't grant `feature`. */
 async function assertFeature(
@@ -52,14 +52,6 @@ async function assertFeature(
   }
 }
 
-/** The transaction object type handed to `db.transaction(cb)`. */
-type DB =
-  Parameters<typeof db.transaction>[0] extends (tx: infer T) => unknown
-    ? T
-    : never;
-
-export type { DB };
-
 /** Create input: slug is optional (auto-generated from title). */
 const createFormInput = CreateFormInput.extend({
   slug: CreateFormInput.shape.slug.optional(),
@@ -71,77 +63,6 @@ const updateFormInput = UpdateFormInput.extend({
 
 const idInput = z.object({ id: z.string().uuid() });
 const slugInput = z.object({ slug: z.string().min(1).max(255) });
-
-/** Insert fields + their options inside a transaction. */
-export async function insertFields(
-  tx: DB,
-  formId: string,
-  fields: CreateFieldInput[],
-) {
-  for (const field of fields) {
-    const inserted = await tx
-      .insert(fieldsTable)
-      .values({
-        formId,
-        type: field.type,
-        label: field.label,
-        placeholder: field.placeholder ?? null,
-        helpText: field.helpText ?? null,
-        required: field.required ?? false,
-        order: field.order,
-        validationRules: field.validationRules ?? {},
-        conditionalLogic: field.conditionalLogic ?? {},
-      })
-      .returning()
-      .execute();
-
-    const created = inserted[0]!;
-
-    if (field.options && field.options.length > 0) {
-      await tx
-        .insert(fieldOptionsTable)
-        .values(
-          field.options.map((option) => ({
-            fieldId: created.id,
-            label: option.label,
-            value: option.value,
-            order: option.order,
-          })),
-        )
-        .execute();
-    }
-  }
-}
-
-/** Throws FORBIDDEN when the form isn't owned by the current user. */
-export async function assertFormOwner(formId: string, userId: string) {
-  const form = await getFormBy(eq(formsTable.id, formId));
-  if (form.ownerId !== userId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You do not have access to this form",
-    });
-  }
-  return form;
-}
-
-/** Snapshot shape: validator Field -> JSON form version field. */
-function toVersionField(field: Field): FormVersionField {
-  return {
-    id: field.id,
-    type: field.type,
-    label: field.label,
-    placeholder: field.placeholder ?? null,
-    helpText: field.helpText ?? null,
-    required: field.required,
-    order: field.order,
-    validationRules: field.validationRules ?? null,
-    conditionalLogic: field.conditionalLogic ?? null,
-    options:
-      field.options?.map((o) => ({ label: o.label, value: o.value, order: o.order })) ??
-      null,
-  };
-}
 
 export const formRouter = router({
   /** Create a new form (optionally with its fields). */
@@ -328,10 +249,12 @@ export const formRouter = router({
       }
 
       let nextCustomDomain = form.customDomain;
+      let domainChanged = false;
       if (input.customDomain !== undefined) {
         const raw = input.customDomain?.trim() || "";
-        nextCustomDomain = raw ? normalizeDomain(raw) : null;
-        if (nextCustomDomain && nextCustomDomain !== form.customDomain) {
+        nextCustomDomain = raw ? parseDomain(raw) : null;
+        domainChanged = nextCustomDomain !== form.customDomain;
+        if (nextCustomDomain && domainChanged) {
           await assertFeature(ctx.user.id, "customDomain");
           const conflict = await db
             .select({ id: formsTable.id })
@@ -383,6 +306,11 @@ export const formRouter = router({
           visibility: input.visibility ?? form.visibility,
           themeId: input.themeId !== undefined ? input.themeId : form.themeId,
           customDomain: nextCustomDomain,
+          // Pointing a form at a different domain revokes its proof of control:
+          // the new domain has to earn its own `verified` status.
+          ...(domainChanged
+            ? { customDomainStatus: "pending" as const, customDomainVerifiedAt: null }
+            : {}),
           settings: nextSettings,
         })
         .where(eq(formsTable.id, input.id))
@@ -532,6 +460,9 @@ export const formRouter = router({
       const available = await isSlugAvailable(input.slug);
       return { slug: input.slug, available };
     }),
+
+  // Custom-domain ownership lifecycle: availability, DNS challenge, release.
+  ...domainProcedures,
 
   /** List version snapshots for a form (newest first). */
   versionsList: protectedProcedure
