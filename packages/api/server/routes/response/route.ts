@@ -3,10 +3,12 @@ import { db, eq, and, desc, count, gte, lte, inArray, sql } from "@repo/db";
 import {
   answersTable,
   fieldsTable,
+  formFileUploadsTable,
   formsTable,
   responsesTable,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
+import { signUploadPath } from "@repo/services/upload-signature";
 import { router, protectedProcedure } from "../../trpc";
 import { getFieldsForForm } from "../../utils/form";
 import { assertFormOwner } from "../form/route";
@@ -253,5 +255,61 @@ export const responseRouter = router({
       await assertFormOwner(rows[0]!.formId, ctx.user.id);
       await db.delete(responsesTable).where(eq(responsesTable.id, input.id)).execute();
       return { success: true };
+    }),
+
+  /**
+   * Lists a form's uploads with a fresh signed download URL for each.
+   *
+   * Stored answers keep whatever URL was minted when the submission was made,
+   * so this is how the owner reaches a file whose link has since expired.
+   */
+  listFileUploads: protectedProcedure
+    .meta({ openapi: { method: "GET", path: "/responses/{formId}/uploads", tags: TAGS } })
+    .input(z.object({ formId: z.string().uuid() }))
+    .output(
+      z.object({
+        uploads: z.array(
+          z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            size: z.number(),
+            mimeType: z.string(),
+            createdAt: z.string(),
+            /** Null while the upload is still waiting for its submission. */
+            claimed: z.boolean(),
+            url: z.string(),
+          }),
+        ),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertFormOwner(input.formId, ctx.user.id);
+      const rows = await db
+        .select({
+          id: formFileUploadsTable.id,
+          originalName: formFileUploadsTable.originalName,
+          size: formFileUploadsTable.size,
+          mimeType: formFileUploadsTable.mimeType,
+          createdAt: formFileUploadsTable.createdAt,
+          responseId: formFileUploadsTable.responseId,
+          storedName: formFileUploadsTable.storedName,
+        })
+        .from(formFileUploadsTable)
+        .where(eq(formFileUploadsTable.formId, input.formId))
+        .orderBy(desc(formFileUploadsTable.createdAt))
+        .limit(200)
+        .execute();
+
+      return {
+        uploads: rows.map((row) => ({
+          id: row.id,
+          name: row.originalName,
+          size: row.size,
+          mimeType: row.mimeType,
+          createdAt: row.createdAt.toISOString(),
+          claimed: row.responseId !== null,
+          url: signUploadPath(row.storedName),
+        })),
+      };
     }),
 });

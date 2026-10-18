@@ -1,5 +1,6 @@
 import { db } from "./index";
 import { count, eq } from "drizzle-orm";
+import type { TemplateCategory } from "@repo/validators";
 import {
   fieldsTable,
   fieldOptionsTable,
@@ -55,7 +56,8 @@ interface SeedTemplate {
   title: string;
   description: string;
   slug: string;
-  category: string;
+  /** Matches the `template_category` enum, so a typo fails here not at insert. */
+  category: TemplateCategory;
   themeId: string;
   settings?: {
     stepMode?: "page" | "question";
