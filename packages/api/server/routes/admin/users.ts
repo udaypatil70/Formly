@@ -1,4 +1,5 @@
 ﻿import { z } from "zod";
+import { hashPassword } from "better-auth/crypto";
 import {
   and,
   count,
@@ -11,7 +12,12 @@ import {
   or,
   type SQL,
 } from "@repo/db";
-import { formsTable, usersTable } from "@repo/db/schema";
+import {
+  accountsTable,
+  formsTable,
+  sessionsTable,
+  usersTable,
+} from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 
 import { adminProcedure } from "../../trpc";
@@ -34,6 +40,12 @@ const setPlanInput = userIdInput.extend({
 
 const suspendInput = userIdInput.extend({
   suspended: z.boolean(),
+});
+
+const resetPasswordInput = userIdInput.extend({
+  // Same bounds as `emailAndPassword` in the auth config, so a reset can never
+  // write a credential that the sign-in path would reject.
+  password: z.string().min(8).max(128),
 });
 
 export const adminUserProcedures = {
@@ -225,6 +237,48 @@ export const adminUserProcedures = {
         id: updated[0].id,
         suspended: updated[0].suspendedAt !== null,
       };
+    }),
+
+  /**
+   * Sets a new password for an account. Used when a user cannot receive the
+   * self-service reset mail.
+   *
+   * The hash comes from better-auth so the value stays verifiable by the
+   * sign-in path, and every existing session is dropped so a stolen cookie
+   * cannot outlive the reset.
+   */
+  resetUserPassword: adminProcedure
+    .meta({
+      openapi: { method: "POST", path: "/admin/users/{id}/password", tags: TAGS },
+    })
+    .input(resetPasswordInput)
+    .output(z.object({ id: z.string().uuid(), ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      assertNotSelf(ctx.user.id, input.id);
+
+      const updated = await db
+        .update(accountsTable)
+        .set({ password: await hashPassword(input.password) })
+        .where(
+          and(
+            eq(accountsTable.userId, input.id),
+            eq(accountsTable.providerId, "credential"),
+          ),
+        )
+        .returning({ id: accountsTable.id })
+        .execute();
+
+      if (!updated[0]) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "This account has no password. They sign in with a social provider.",
+        });
+      }
+
+      await db.delete(sessionsTable).where(eq(sessionsTable.userId, input.id)).execute();
+
+      return { id: input.id, ok: true };
     }),
 
   /**

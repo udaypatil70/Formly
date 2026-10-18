@@ -63,6 +63,11 @@ const AdminFormsPage = lazy(() =>
     default: m.AdminFormsPage,
   })),
 );
+const AdminTemplatesPage = lazy(() =>
+  import("~/pages/admin/admin-templates-page").then((m) => ({
+    default: m.AdminTemplatesPage,
+  })),
+);
 
 export function App() {
   return (
@@ -86,6 +91,7 @@ export function App() {
           <Route path="/admin" element={<AdminOverviewPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/forms" element={<AdminFormsPage />} />
+          <Route path="/admin/templates" element={<AdminTemplatesPage />} />
         </Route>
         <Route
           path="/builder"

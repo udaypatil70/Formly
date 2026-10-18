@@ -4,6 +4,7 @@ import {
   ClipboardPenIcon,
   LayoutDashboardIcon,
   FilesIcon,
+  LayoutTemplateIcon,
   MenuIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/admin", label: "Overview", icon: LayoutDashboardIcon, end: true },
   { to: "/admin/users", label: "Users", icon: UsersIcon, end: false },
   { to: "/admin/forms", label: "Forms", icon: FilesIcon, end: false },
+  { to: "/admin/templates", label: "Templates", icon: LayoutTemplateIcon, end: false },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
