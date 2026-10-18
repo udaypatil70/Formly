@@ -3,7 +3,7 @@ import { OpenApiMeta } from "trpc-to-openapi";
 import { PLAN_FEATURE_LABELS, type PlanFeature } from "@repo/db/schema";
 
 import { createContext } from "./context";
-import { isAdminEmail } from "./utils/admin";
+import { isAdminUser } from "./utils/admin";
 import { getUserEntitlements, planAllowsFeature } from "./utils/plans";
 
 export const tRPCContext = initTRPC
@@ -61,7 +61,7 @@ const enforceAdmin = tRPCContext.middleware(({ ctx, next }) => {
       message: "You must be logged in to access this resource",
     });
   }
-  if (!isAdminEmail(ctx.user.email)) {
+  if (!isAdminUser(ctx.user)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "You do not have admin access",

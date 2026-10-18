@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db, eq, and, desc, count, inArray, ilike } from "@repo/db";
 import { fieldsTable, formsTable, themesTable } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
+import { TemplateCategory } from "@repo/validators";
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
 import { getFieldsForForm } from "../../utils/form";
 import { ensureUniqueSlug } from "../../utils/slug";
@@ -22,12 +23,12 @@ const idInput = z.object({ id: z.string().uuid() });
 
 const templateListInput = z.object({
   search: z.string().max(100).optional(),
-  category: z.string().max(50).optional(),
+  category: TemplateCategory.optional(),
   limit: z.number().int().min(1).max(100).default(50),
 });
 
 const templateMetaOutput = formMetaOutput.extend({
-  templateCategory: z.string().nullable().optional(),
+  templateCategory: TemplateCategory.nullable().optional(),
   fieldCount: z.number(),
   themeName: z.string().nullable().optional(),
   colors: z

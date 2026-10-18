@@ -86,6 +86,25 @@ export const ConditionalLogicSchema = z
   .optional();
 export type ConditionalLogic = z.infer<typeof ConditionalLogicSchema>;
 
+// ─── Template Categories ────────────────────────────────
+// Single source of truth shared by the DB enum (`template_category`), the
+// template API filters and the frontend category picker.
+
+export const TEMPLATE_CATEGORIES = [
+  "feedback",
+  "sales",
+  "education",
+  "health",
+  "events",
+  "product",
+  "careers",
+  "community",
+  "it",
+] as const;
+
+export const TemplateCategory = z.enum(TEMPLATE_CATEGORIES);
+export type TemplateCategory = z.infer<typeof TemplateCategory>;
+
 // ─── URL Safety ───────────────────────────────────────────
 
 /**

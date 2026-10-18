@@ -51,7 +51,7 @@ export const authRouter = router({
               name: user.name,
               email: user.email,
               image: user.image ?? null,
-              role: getUserRole(user.email),
+              role: getUserRole(user),
               plan: normalizePlan(user.plan),
               subscriptionStatus: user.subscriptionStatus ?? null,
               company: user.company ?? null,
