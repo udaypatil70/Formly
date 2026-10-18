@@ -9,6 +9,22 @@ const envSchema = z.object({
     .string()
     .default("./uploads")
     .describe("Directory for uploaded response files"),
+  UPLOAD_SIGNING_SECRET: z
+    .string()
+    .optional()
+    .describe("Signs upload download URLs; falls back to BETTER_AUTH_SECRET"),
+  UPLOAD_SWEEP_GRACE_HOURS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(24)
+    .describe("Hours an unclaimed upload is kept before it is swept"),
+  UPLOAD_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(3_600_000)
+    .describe("How often to sweep; 0 disables the sweeper"),
   DOMAIN_VERIFICATION_DNS_TARGET: z
     .string()
     .optional()

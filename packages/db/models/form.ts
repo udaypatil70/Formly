@@ -498,6 +498,10 @@ export const formViewsTable = pgTable(
 // ─── File Uploads ─────────────────────────────────────────
 // Files are stored on disk (server uploads dir); this table tracks metadata
 // and maps the stored filename back to a safe download name.
+//
+// An upload starts orphaned (`response_id` null) and is claimed by the
+// submission that references it. Rows still null after the grace period are
+// swept: they are abandoned by the visitor or the submission never arrived.
 
 export type FileAnswer = {
   fileId: string;
@@ -514,14 +518,27 @@ export const formFileUploadsTable = pgTable(
     formId: uuid("form_id")
       .notNull()
       .references(() => formsTable.id, { onDelete: "cascade" }),
+    /** Field the upload was made for; null once that field is deleted. */
+    fieldId: uuid("field_id").references(() => fieldsTable.id, {
+      onDelete: "set null",
+    }),
+    /** Null while the upload is unclaimed. An orphan is swept after a grace period. */
+    responseId: uuid("response_id").references(() => responsesTable.id, {
+      onDelete: "set null",
+    }),
     storedName: text("stored_name").notNull().unique(),
     originalName: text("original_name").notNull(),
     mimeType: varchar("mime_type", { length: 100 }).notNull(),
     size: integer("size").notNull(),
+    /** Salted hash of the uploader's IP, matching how responses store theirs. */
+    uploadedByIpHash: varchar("uploaded_by_ip_hash", { length: 64 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("form_file_uploads_form_id_idx").on(table.formId),
+    index("form_file_uploads_field_id_idx").on(table.fieldId),
+    index("form_file_uploads_response_id_idx").on(table.responseId),
+    index("form_file_uploads_created_at_idx").on(table.createdAt),
   ],
 );
 

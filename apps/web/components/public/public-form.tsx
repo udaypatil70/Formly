@@ -523,6 +523,9 @@ function FileUploadInput({
       const fd = new FormData();
       fd.append("file", f);
       fd.append("formId", formId);
+      // The server binds the upload to this field and enforces its maxSize and
+      // allowedTypes; without it the upload is rejected.
+      fd.append("fieldId", field.id);
       const res = await fetch(`${getApiOrigin()}/upload`, {
         method: "POST",
         body: fd,

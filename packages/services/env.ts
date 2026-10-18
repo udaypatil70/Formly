@@ -81,6 +81,11 @@ const envSchema = z.object({
   DOMAIN_VERIFICATION_DNS_TARGET: z.string().optional(),
   /** Subdomain prefix the TXT challenge is published under. */
   DOMAIN_VERIFICATION_TXT_PREFIX: z.string().default("_formly"),
+  /**
+   * Key used to sign upload download URLs. Optional: when unset the auth secret
+   * is used, so deployments only need this if they sign uploads separately.
+   */
+  UPLOAD_SIGNING_SECRET: z.string().optional(),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

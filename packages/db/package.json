@@ -17,6 +17,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@repo/validators": "workspace:*",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.16.3",

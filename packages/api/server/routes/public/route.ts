@@ -1,6 +1,6 @@
 ﻿import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { db, eq, and, or, desc, count, ilike } from "@repo/db";
+import { db, eq, and, or, desc, count, ilike, isNull } from "@repo/db";
 import {
   answersTable,
   formsTable,
@@ -9,11 +9,13 @@ import {
   formViewsTable,
   formPaymentsTable,
   formDraftsTable,
+  formFileUploadsTable,
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import {
   buildResponseSchema,
   AnswerValueSchema,
+  FileAnswerValueSchema,
   PaymentAnswerValueSchema,
 } from "@repo/validators";
 import { router, publicProcedure } from "../../trpc";
@@ -33,6 +35,7 @@ import { verifyPassword } from "../../utils/password";
 import { notifyNewResponse } from "../../utils/notifications";
 import { triggerWebhooks } from "../../utils/webhooks";
 import { consumeResponseQuota, getUserEntitlements } from "../../utils/plans";
+import { signUploadPath } from "@repo/services/upload-signature";
 import {
   razorpayConfigured,
   verifyRazorpaySignature,
@@ -606,6 +609,67 @@ export const publicRouter = router({
         });
       }
 
+      // File uploads: the client-supplied `fileId` is treated as a claim, not
+      // as fact. Each one is resolved against a real upload row that belongs to
+      // this form and has not already been claimed by another submission, and
+      // the stored answer is rebuilt from that row. A fabricated id, an upload
+      // made for a different form, or an arbitrary external URL cannot survive
+      // this and would otherwise be rendered to the owner as a download link.
+      const fileFields = validatorFields.filter((f) => f.type === "file_upload");
+      const claimedUploads: { id: string }[] = [];
+
+      for (const field of fileFields) {
+        const answer = result.data[field.id];
+        if (answer === undefined || answer === null) continue;
+
+        const fileId =
+          typeof answer === "object" && !Array.isArray(answer) && "fileId" in answer
+            ? (answer as { fileId: unknown }).fileId
+            : undefined;
+        if (typeof fileId !== "string") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Invalid file upload for "${field.label}"`,
+          });
+        }
+
+        const [upload] = await db
+          .select({
+            id: formFileUploadsTable.id,
+            originalName: formFileUploadsTable.originalName,
+            mimeType: formFileUploadsTable.mimeType,
+            size: formFileUploadsTable.size,
+            storedName: formFileUploadsTable.storedName,
+          })
+          .from(formFileUploadsTable)
+          .where(
+            and(
+              eq(formFileUploadsTable.id, fileId),
+              eq(formFileUploadsTable.formId, form.id),
+              // Already-claimed uploads belong to the submission that took them.
+              isNull(formFileUploadsTable.responseId),
+            ),
+          )
+          .limit(1)
+          .execute();
+
+        if (!upload) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `The file uploaded for "${field.label}" could not be found. Please upload it again.`,
+          });
+        }
+
+        result.data[field.id] = FileAnswerValueSchema.parse({
+          fileId: upload.id,
+          name: upload.originalName,
+          size: upload.size,
+          mimeType: upload.mimeType,
+          url: signUploadPath(upload.storedName),
+        });
+        claimedUploads.push({ id: upload.id });
+      }
+
       // Payment fields: every one must have a verified, unused Razorpay
       // payment. The payment answer is rebuilt server-side from the order we
       // created, never trusted from the client payload.
@@ -736,6 +800,30 @@ export const publicRouter = router({
               })),
             )
             .execute();
+        }
+
+        // Claim the uploads only now that the response row exists. The
+        // `response_id IS NULL` guard means a second submission racing for the
+        // same upload loses and rolls back instead of stealing it.
+        for (const upload of claimedUploads) {
+          const claimed = await tx
+            .update(formFileUploadsTable)
+            .set({ responseId: response.id })
+            .where(
+              and(
+                eq(formFileUploadsTable.id, upload.id),
+                isNull(formFileUploadsTable.responseId),
+              ),
+            )
+            .returning({ id: formFileUploadsTable.id })
+            .execute();
+
+          if (!claimed[0]) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "This upload was already submitted. Please upload it again.",
+            });
+          }
         }
 
         for (const payment of pendingPayments) {
