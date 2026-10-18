@@ -10,6 +10,8 @@ import {
 
 export const userPlanEnum = pgEnum("user_plan", ["free", "pro", "enterprise"]);
 
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
 
@@ -19,6 +21,13 @@ export const usersTable = pgTable("users", {
   image: text("image"),
 
   plan: userPlanEnum("plan").default("free").notNull(),
+  /**
+   * Persisted so admin grants survive a redeploy and show up in the audit
+   * trail. `ADMIN_EMAILS` still acts as a bootstrap: see `utils/admin.ts`.
+   */
+  role: userRoleEnum("role").default("user").notNull(),
+  /** Set while an operator has blocked the account; null means active. */
+  suspendedAt: timestamp("suspended_at"),
   subscriptionId: varchar("subscription_id", { length: 64 }),
   subscriptionStatus: varchar("subscription_status", { length: 32 }),
   planUpdatedAt: timestamp("plan_updated_at"),

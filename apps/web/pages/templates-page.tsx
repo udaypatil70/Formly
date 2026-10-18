@@ -16,6 +16,7 @@ import {
   TypeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TEMPLATE_CATEGORIES, type TemplateCategory } from "@repo/validators";
 
 import { trpc } from "~/trpc/client";
 import { Badge } from "~/components/ui/badge";
@@ -41,19 +42,26 @@ import { SiteFooter } from "~/components/marketing/site-footer";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { cn } from "~/lib/utils";
 
-const CATEGORIES = [
-  { value: "feedback", label: "Feedback" },
-  { value: "sales", label: "Sales" },
-  { value: "education", label: "Education" },
-  { value: "health", label: "Health" },
-  { value: "events", label: "Events" },
-  { value: "product", label: "Product" },
-  { value: "careers", label: "Careers" },
-  { value: "community", label: "Community" },
-  { value: "it", label: "IT" },
-] as const;
+/** Labels are presentational; the values come from the shared DB enum so the
+ * picker can never offer a category the API would reject. */
+const CATEGORY_LABELS: Record<TemplateCategory, string> = {
+  feedback: "Feedback",
+  sales: "Sales",
+  education: "Education",
+  health: "Health",
+  events: "Events",
+  product: "Product",
+  careers: "Careers",
+  community: "Community",
+  it: "IT",
+};
 
-type CategoryValue = (typeof CATEGORIES)[number]["value"];
+const CATEGORIES = TEMPLATE_CATEGORIES.map((value) => ({
+  value,
+  label: CATEGORY_LABELS[value],
+}));
+
+type CategoryValue = TemplateCategory;
 
 const FIELD_TYPE_LABELS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   short_text: { label: "Short text", icon: TypeIcon },
