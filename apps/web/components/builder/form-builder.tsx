@@ -65,6 +65,7 @@ export interface FormBuilderMeta {
   visibility: string;
   themeId?: string | null;
   customDomain?: string | null;
+  customDomainStatus?: "pending" | "verified" | "failed" | null;
   settings?: BuilderFormSettings;
 }
 
@@ -680,6 +681,7 @@ export function FormBuilder({
           title: meta.title,
           slug: meta.slug,
           customDomain: meta.customDomain ?? null,
+          customDomainStatus: meta.customDomainStatus ?? null,
         }}
         open={shareOpen}
         onOpenChange={setShareOpen}

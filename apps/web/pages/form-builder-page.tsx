@@ -36,6 +36,7 @@ export function FormBuilderPage() {
     visibility: detail.data.form.visibility,
     themeId: detail.data.form.themeId ?? null,
     customDomain: detail.data.form.customDomain ?? null,
+    customDomainStatus: detail.data.form.customDomainStatus ?? null,
     settings: detail.data.form.settings ?? {},
   };
 

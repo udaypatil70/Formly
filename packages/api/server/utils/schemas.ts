@@ -90,6 +90,9 @@ export const formMetaOutput = z.object({
   archived: z.boolean(),
   themeId: z.string().uuid().nullable().optional(),
   customDomain: z.string().nullable().optional(),
+  /** Whether the custom domain has been proven to belong to the owner. */
+  customDomainStatus: z.enum(["pending", "verified", "failed"]).optional(),
+  customDomainVerifiedAt: z.string().nullable().optional(),
   settings: z
     .object({
       password: z.string().optional(),

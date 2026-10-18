@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
 import type { ConditionalLogic, FieldType } from "@repo/validators";
 
 import { trpc } from "~/trpc/client";
@@ -21,6 +22,7 @@ import {
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+import { useDebouncedValue } from "~/lib/use-debounce";
 import { mapTheme, ThemeSection } from "./theme-editor";
 
 interface FieldInspectorProps {
@@ -1218,6 +1220,139 @@ function WebhooksSettings({ formId }: { formId: string }) {
   );
 }
 
+/**
+ * Ownership proof for a form's custom domain.
+ *
+ * Saving the domain is not enough — the owner has to publish a challenge token
+ * in DNS before the domain is served. This panel shows the exact records and
+ * lets them re-check once DNS has propagated.
+ */
+function DomainVerification({
+  formId,
+  domain,
+  onReleased,
+}: {
+  formId: string;
+  domain: string | null;
+  onReleased: () => void;
+}) {
+  const utils = trpc.useUtils();
+
+  const status = trpc.form.getDomainVerification.useQuery(
+    { id: formId },
+    { enabled: Boolean(domain), retry: false },
+  );
+
+  const refresh = async () => {
+    await utils.form.getDomainVerification.invalidate({ id: formId });
+  };
+
+  const request = trpc.form.requestDomainVerification.useMutation({
+    onSuccess: async () => {
+      await refresh();
+      toast.success("Challenge issued — publish the records below in DNS");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const confirm = trpc.form.verifyDomain.useMutation({
+    onSuccess: async (result) => {
+      await refresh();
+      await utils.form.getById.invalidate({ id: formId });
+      if (result.status === "verified") {
+        toast.success("Domain verified — your form is live on it");
+      } else {
+        toast.error(result.lastError ?? "No matching DNS record found");
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const remove = trpc.form.removeDomain.useMutation({
+    onSuccess: async () => {
+      await refresh();
+      await utils.form.getById.invalidate({ id: formId });
+      // The server released the claim, so drop it from the builder too.
+      onReleased();
+      toast.success("Domain removed");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  if (!domain) return null;
+
+  const state = status.data;
+  const busy = request.isPending || confirm.isPending || remove.isPending;
+
+  return (
+    <div className="rounded-md border border-border/60 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">
+          {state?.status === "verified"
+            ? "Verified"
+            : state?.status === "failed"
+              ? "Verification failed"
+              : "Pending verification"}
+        </span>
+        {state?.verifiedAt ? (
+          <span className="text-muted-foreground text-[11px]">
+            {new Date(state.verifiedAt).toLocaleDateString()}
+          </span>
+        ) : null}
+      </div>
+
+      {state?.instructions?.length ? (
+        <div className="mt-2.5 flex flex-col gap-2">
+          {state.instructions.map((record) => (
+            <div key={record.method} className="flex flex-col gap-1">
+              <span className="text-muted-foreground text-[11px]">
+                {record.label} on {record.host}
+              </span>
+              <code className="bg-background/60 block w-full overflow-x-auto rounded px-2 py-1 font-mono text-[11px]">
+                {record.value}
+              </code>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {state?.lastError && state.status !== "verified" ? (
+        <p className="mt-2 text-[11px] text-destructive">{state.lastError}</p>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          disabled={busy}
+          onClick={() => confirm.mutate({ id: formId })}
+        >
+          Check DNS
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          type="button"
+          disabled={busy}
+          onClick={() => request.mutate({ id: formId })}
+        >
+          New challenge
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          type="button"
+          disabled={busy}
+          onClick={() => remove.mutate({ id: formId })}
+        >
+          Remove
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function FormSettings({
   meta,
   theme,
@@ -1238,12 +1373,17 @@ function FormSettings({
   const settings = meta.settings ?? {};
   const [passwordDraft, setPasswordDraft] = useState("");
   const [slugDraft, setSlugDraft] = useState(meta.slug);
+  const [domainDraft, setDomainDraft] = useState(meta.customDomain ?? "");
   const hasPassword = Boolean(settings.password);
   const emailFields = fields.filter((f) => f.type === "email");
 
   useEffect(() => {
     setSlugDraft(meta.slug);
   }, [meta.slug]);
+
+  useEffect(() => {
+    setDomainDraft(meta.customDomain ?? "");
+  }, [meta.customDomain]);
 
   const commitSlug = () => {
     const cleaned = slugify(slugDraft);
@@ -1253,6 +1393,35 @@ function FormSettings({
     }
     if (cleaned === meta.slug) return;
     onUpdateMeta({ slug: cleaned });
+  };
+
+  // Availability is checked as the owner types so a clash is visible before it
+  // is saved, instead of surfacing as a unique-constraint error on submit.
+  const debouncedDomain = useDebouncedValue(domainDraft.trim(), 500);
+  const domainCheck = trpc.form.checkDomain.useQuery(
+    { domain: debouncedDomain, formId: meta.id },
+    {
+      enabled: debouncedDomain.length > 3,
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const isCurrentDomain = debouncedDomain === (meta.customDomain ?? "");
+  const domainHint = isCurrentDomain
+    ? null
+    : (domainCheck.data?.available
+        ? `${debouncedDomain} is available`
+        : (domainCheck.data?.reason ?? domainCheck.error?.message ?? null));
+
+  // Committed on blur, like the slug: saving on every keystroke would throw away
+  // the proof of control on each intermediate value.
+  const commitDomain = () => {
+    const cleaned = domainDraft.trim();
+    if (!cleaned || cleaned === meta.customDomain) {
+      setDomainDraft(meta.customDomain ?? "");
+      return;
+    }
+    onUpdateMeta({ customDomain: cleaned });
   };
 
   return (
@@ -1292,14 +1461,25 @@ function FormSettings({
           <Input
             id="form-custom-domain"
             placeholder="forms.yourbrand.com"
-            value={meta.customDomain ?? ""}
-            onChange={(e) => onUpdateMeta({ customDomain: e.target.value })}
+            value={domainDraft}
+            onChange={(e) => setDomainDraft(e.target.value)}
+            onBlur={commitDomain}
           />
         </div>
+        {domainHint ? (
+          <p className="text-xs text-muted-foreground">{domainHint}</p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
-          Point a subdomain or apex at the app and it will open this form
-          directly at the root with no /form/ path. Clear it to remove.
+          Serve this form at your own domain with no /form/ path. You&apos;ll
+          need to prove you control it before it goes live.
         </p>
+        <DomainVerification
+          formId={meta.id}
+          domain={meta.customDomain ?? null}
+          onReleased={() =>
+            onUpdateMeta({ customDomain: null, customDomainStatus: "pending" })
+          }
+        />
       </div>
 
       <div className="flex flex-col gap-2">

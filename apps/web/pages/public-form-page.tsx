@@ -6,6 +6,7 @@ import { PasswordGate } from "~/components/public/password-gate";
 import { PublicFormShell } from "~/components/public/public-form-shell";
 import type { PublicFormData, PublicTheme } from "~/components/public/types";
 import { Spinner } from "~/components/ui/spinner";
+import { NotFoundPage } from "~/pages/not-found-page";
 import { trpc } from "~/trpc/client";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
 
@@ -65,6 +66,10 @@ export function PublicFormPage() {
     );
 
   if (data.isError || !data.data) {
+    // Mounted as the catch-all route so a custom domain serves its form from
+    // any path. A host that resolves to nothing is therefore just an unknown
+    // path on the app itself, which deserves the branded 404.
+    if (!hasSlug) return <NotFoundPage />;
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-2">
         <p className="text-muted-foreground text-sm">

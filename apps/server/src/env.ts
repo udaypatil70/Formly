@@ -9,6 +9,14 @@ const envSchema = z.object({
     .string()
     .default("./uploads")
     .describe("Directory for uploaded response files"),
+  DOMAIN_VERIFICATION_DNS_TARGET: z
+    .string()
+    .optional()
+    .describe("Hostname custom domains should CNAME to"),
+  DOMAIN_VERIFICATION_TXT_PREFIX: z
+    .string()
+    .default("_formly")
+    .describe("Subdomain prefix the TXT challenge is published under"),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),

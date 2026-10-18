@@ -1,6 +1,6 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+﻿import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { db, eq, and, desc, count, ilike } from "@repo/db";
+import { db, eq, and, or, desc, count, ilike } from "@repo/db";
 import {
   answersTable,
   formsTable,
@@ -322,9 +322,13 @@ export const publicRouter = router({
       }
 
       const domain = normalizeDomain(input.domain);
+      // A domain is only served once the owner proved they control it. Without
+      // this check any account could point a vhost at someone else's site by
+      // writing the column directly.
       const form = await getFormBy(
         and(
           eq(formsTable.customDomain, domain),
+          eq(formsTable.customDomainStatus, "verified"),
           eq(formsTable.status, "published"),
           eq(formsTable.archived, false),
         )!,
@@ -826,8 +830,16 @@ export const publicRouter = router({
     .query(async ({ input }) => {
       const { page, pageSize } = input;
 
+      // Explore shows ordinary published forms plus any template an operator
+      // has featured. Templates are authored as drafts, so requiring
+      // `status = published` everywhere would make featuring one a no-op.
+      const publishable = or(
+        and(eq(formsTable.isTemplate, false), eq(formsTable.status, "published")),
+        and(eq(formsTable.isTemplate, true), eq(formsTable.isFeatured, true)),
+      )!;
+
       const conditions = [
-        eq(formsTable.status, "published"),
+        publishable,
         eq(formsTable.archived, false),
         eq(formsTable.visibility, "public"),
       ];
@@ -841,6 +853,7 @@ export const publicRouter = router({
       if (input.category) {
         conditions.push(eq(themesTable.category, input.category));
       }
+      const where = and(...conditions);
 
       const rows = await db
         .select({
@@ -853,7 +866,7 @@ export const publicRouter = router({
         .from(formsTable)
         .leftJoin(themesTable, eq(themesTable.id, formsTable.themeId))
         .leftJoin(responsesTable, eq(responsesTable.formId, formsTable.id))
-        .where(and(...conditions))
+        .where(where)
         .groupBy(formsTable.id, themesTable.id)
         .orderBy(desc(formsTable.isFeatured), desc(formsTable.createdAt))
         .limit(pageSize)
@@ -863,7 +876,7 @@ export const publicRouter = router({
       const [totalRow] = await db
         .select({ total: count() })
         .from(formsTable)
-        .where(and(...conditions))
+        .where(where)
         .execute();
 
       return {

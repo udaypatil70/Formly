@@ -74,6 +74,13 @@ const envSchema = z.object({
    * forwarded header is ignored so it cannot be spoofed to dodge rate limits.
    */
   TRUST_PROXY: z.string().optional(),
+  /**
+   * Hostname owners should CNAME their custom domain to. Optional: when unset
+   * only the TXT challenge route is offered.
+   */
+  DOMAIN_VERIFICATION_DNS_TARGET: z.string().optional(),
+  /** Subdomain prefix the TXT challenge is published under. */
+  DOMAIN_VERIFICATION_TXT_PREFIX: z.string().default("_formly"),
 });
 
 function createEnv(env: NodeJS.ProcessEnv) {

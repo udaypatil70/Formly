@@ -63,9 +63,6 @@ const AdminFormsPage = lazy(() =>
     default: m.AdminFormsPage,
   })),
 );
-const NotFoundPage = lazy(() =>
-  import("~/pages/not-found-page").then((m) => ({ default: m.NotFoundPage })),
-);
 
 export function App() {
   return (
@@ -106,7 +103,9 @@ export function App() {
             </RequireAuth>
           }
         />
-        <Route path="*" element={<NotFoundPage />} />
+        {/* Custom domains serve their form from every path, including "/", so
+            the catch-all resolves by hostname and falls back to the 404 page. */}
+        <Route path="*" element={<PublicFormPage />} />
       </Routes>
     </Suspense>
   );
