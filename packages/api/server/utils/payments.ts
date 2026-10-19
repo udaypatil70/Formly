@@ -3,10 +3,27 @@ import { formPaymentsTable } from "@repo/db/schema";
 
 type PaymentRowStatus = "paid" | "failed" | "refunded";
 
+/** Shape needed to build a `payment.*` webhook payload downstream. */
+export interface TransitionedPayment {
+  id: string;
+  formId: string;
+  razorpayOrderId: string | null;
+  razorpayPaymentId: string | null;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  responseId: string | null;
+}
+
 /**
  * Applies a verified Razorpay webhook event to the matching payment row.
  * Only updates rows still in the `created` state (or any row matched by
  * payment id) so an already captured payment is never downgraded.
+ *
+ * Returns the rows it actually moved so the caller can emit `payment.paid` /
+ * `payment.refunded` — without that return value a refund would be invisible
+ * to the owner's integration, since nothing else in the app sees the
+ * transition happen.
  */
 export async function applyRazorpayWebhookEvent(payload: {
   event?: string;
@@ -14,7 +31,7 @@ export async function applyRazorpayWebhookEvent(payload: {
     payment?: { entity?: { id?: string; order_id?: string } };
     refund?: { entity?: { payment_id?: string } };
   };
-}): Promise<{ handled: boolean; count: number }> {
+}): Promise<{ handled: boolean; count: number; rows: TransitionedPayment[] }> {
   const event = payload.event ?? "";
   const paymentEntity = payload.payload?.payment?.entity;
   const refundEntity = payload.payload?.refund?.entity;
@@ -32,7 +49,7 @@ export async function applyRazorpayWebhookEvent(payload: {
     status = "refunded";
   }
 
-  if (!status) return { handled: false, count: 0 };
+  if (!status) return { handled: false, count: 0, rows: [] };
 
   const orderId = paymentEntity?.order_id;
   const paymentId = paymentEntity?.id ?? refundEntity?.payment_id;
@@ -58,7 +75,7 @@ export async function applyRazorpayWebhookEvent(payload: {
       .returning()
       .execute();
     if (updated.length > 0) {
-      return { handled: true, count: updated.length };
+      return { handled: true, count: updated.length, rows: updated };
     }
   }
 
@@ -69,8 +86,12 @@ export async function applyRazorpayWebhookEvent(payload: {
       .where(eq(formPaymentsTable.razorpayPaymentId, paymentId))
       .returning()
       .execute();
-    return { handled: updated.length > 0, count: updated.length };
+    return {
+      handled: updated.length > 0,
+      count: updated.length,
+      rows: updated,
+    };
   }
 
-  return { handled: false, count: 0 };
+  return { handled: false, count: 0, rows: [] };
 }

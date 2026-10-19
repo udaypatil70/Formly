@@ -544,3 +544,101 @@ export const SubmitResponseInput = z.object({
   turnstileToken: z.string().optional(),
 });
 export type SubmitResponseInput = z.infer<typeof SubmitResponseInput>;
+
+// ─── Webhook Events ───────────────────────────────────────
+// Single source of truth shared by the API (filtering, payload building) and the
+// builder UI (event picker, delivery log filters), so a hook can never
+// subscribe to an event the delivery pipeline cannot emit.
+
+export const WEBHOOK_EVENT_GROUPS = [
+  {
+    id: "responses",
+    label: "Responses",
+    events: [
+      { value: "response.created", label: "Response submitted" },
+      { value: "response.updated", label: "Response edited" },
+    ],
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    events: [
+      { value: "payment.paid", label: "Payment captured" },
+      { value: "payment.refunded", label: "Payment refunded" },
+    ],
+  },
+  {
+    id: "form",
+    label: "Form lifecycle",
+    events: [
+      { value: "form.published", label: "Form published" },
+      { value: "form.unpublished", label: "Form unpublished" },
+    ],
+  },
+  {
+    id: "drafts",
+    label: "Drafts",
+    events: [{ value: "draft.saved", label: "Partial response saved" }],
+  },
+] as const;
+
+export const WEBHOOK_EVENTS = [
+  "response.created",
+  "response.updated",
+  "payment.paid",
+  "payment.refunded",
+  "form.published",
+  "form.unpublished",
+  "draft.saved",
+] as const;
+
+export const WebhookEvent = z.enum(WEBHOOK_EVENTS);
+export type WebhookEvent = z.infer<typeof WebhookEvent>;
+
+/** Wildcard stored alongside real events; a hook with it receives everything. */
+export const WEBHOOK_EVENT_ALL = "*" as const;
+
+/**
+ * A hook's subscription list: real event names, or the wildcard.
+ * Kept permissive on read because rows written before an event was typed here
+ * may still hold names the pipeline no longer emits.
+ */
+export const WebhookEventList = z.array(z.string());
+
+export function isWildcardEvent(events: readonly string[] | null | undefined) {
+  return !!events?.includes(WEBHOOK_EVENT_ALL);
+}
+
+/** Whether a hook subscribed to `events` should fire for `event`. */
+export function webhookSubscribesTo(
+  events: readonly string[] | null | undefined,
+  event: string,
+) {
+  if (!Array.isArray(events) || events.length === 0) {
+    // A hook with no stored selection defaults to the original single-event
+    // behaviour rather than silently receiving nothing.
+    return event === "response.created";
+  }
+  return isWildcardEvent(events) || events.includes(event);
+}
+
+/**
+ * Normalizes a requested subscription list into known events plus the
+ * wildcard, dropping duplicates and anything the pipeline does not emit.
+ */
+export function normalizeWebhookEvents(input: readonly string[]) {
+  const seen = new Set<string>();
+  for (const raw of input) {
+    const value = raw.trim();
+    if (!value) continue;
+    if (value === WEBHOOK_EVENT_ALL) {
+      seen.add(WEBHOOK_EVENT_ALL);
+      continue;
+    }
+    if ((WEBHOOK_EVENTS as readonly string[]).includes(value)) {
+      seen.add(value);
+    }
+  }
+  if (seen.size === 0) seen.add("response.created");
+  return [...seen];
+}

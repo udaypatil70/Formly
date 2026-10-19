@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./user";
 
 // ─── Enums ────────────────────────────────────────────────
@@ -561,11 +562,70 @@ export const formWebhooksTable = pgTable(
     lastStatus: integer("last_status"),
     lastError: text("last_error"),
     lastTriggeredAt: timestamp("last_triggered_at"),
+    /** When the signing secret was last replaced; null if never rotated. */
+    secretRotatedAt: timestamp("secret_rotated_at"),
+    /** Consecutive failed deliveries, reset on any success. */
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    /** Set when the hook was switched off automatically after repeated failure. */
+    autoDisabledAt: timestamp("auto_disabled_at"),
+    autoDisabledReason: text("auto_disabled_reason"),
   },
   (table) => [
     index("form_webhooks_form_id_idx").on(table.formId),
   ],
 );
+
+// ─── Webhook Deliveries ────────────────────────────────────
+// One row per delivery attempt batch for a single event. The body is stored
+// verbatim because it is exactly what the receiver saw (and what the HMAC was
+// computed over) — replaying a retry must send byte-identical JSON or the
+// receiver's signature check fails.
+//
+// `status` mirrors the lifecycle:
+//   pending  → queued, awaiting the worker (or the first inline attempt)
+//   success  → receiver answered 2xx
+//   retrying → failed but still has attempts left, nextRetryAt is set
+//   dead     → exhausted, or failed with a status that must not be retried
+export const formWebhookDeliveriesTable = pgTable(
+  "form_webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => formWebhooksTable.id, { onDelete: "cascade" }),
+    event: varchar("event", { length: 50 }).notNull(),
+    status: varchar("status", { length: 20 }).$type<WebhookDeliveryStatus>()
+      .default("pending")
+      .notNull(),
+    /** The exact JSON delivered, so a retry reproduces the same signature. */
+    requestBody: jsonb("request_body").$type<Record<string, unknown>>().notNull(),
+    /** Snapshot of the destination at enqueue time, for debugging DNS drift. */
+    url: text("url").notNull(),
+    responseStatus: integer("response_status"),
+    /** Truncated receiver body; enough to diagnose, bounded to avoid bloat. */
+    responseBody: text("response_body"),
+    error: text("error"),
+    durationMs: integer("duration_ms"),
+    /** 1 on the first try, incremented by each retry. */
+    attempt: integer("attempt").default(1).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    nextRetryAt: timestamp("next_retry_at"),
+    /** Set when a manual redelivery supersedes the stored body. */
+    isTest: boolean("is_test").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("form_webhook_deliveries_webhook_id_idx").on(table.webhookId),
+    index("form_webhook_deliveries_created_at_idx").on(table.createdAt),
+    // The worker's claim query filters on this, so it carries the partial
+    // predicate rather than scanning settled deliveries.
+    index("form_webhook_deliveries_pending_idx")
+      .on(table.nextRetryAt)
+      .where(sql`${table.status} IN ('pending', 'retrying')`),
+  ],
+);
+
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -593,6 +653,16 @@ export type InsertDomainVerification =
   typeof domainVerificationsTable.$inferInsert;
 export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;
 export type InsertFormWebhook = typeof formWebhooksTable.$inferInsert;
+export type SelectFormWebhookDelivery =
+  typeof formWebhookDeliveriesTable.$inferSelect;
+export type InsertFormWebhookDelivery =
+  typeof formWebhookDeliveriesTable.$inferInsert;
+export type WebhookDeliveryStatus =
+  | "pending"
+  | "success"
+  | "retrying"
+  | "dead";
+export type WebhookDelivery = SelectFormWebhookDelivery;
 export type SelectFormFileUpload = typeof formFileUploadsTable.$inferSelect;
 export type InsertFormFileUpload = typeof formFileUploadsTable.$inferInsert;
 export type SelectFormDraft = typeof formDraftsTable.$inferSelect;

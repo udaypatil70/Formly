@@ -221,32 +221,35 @@ but the ownership story does not exist.
 
 ## E. Webhooks — event filtering and delivery history missing (P1)
 
-### E.1 Missing
+**Status: resolved.** All six gaps are closed; see the table at the end.
 
-1. **`form_webhooks.events` is stored and ignored.**
-   `packages/api/server/utils/webhooks.ts:106-127` fans out `response.created` to
-   every `active` hook without consulting the `events` array. The builder lets
-   you pick events (`field-inspector.tsx:1062-1089`) but the choice has no
-   effect.
-2. **Only one event type exists.** No `response.updated`, `payment.paid`,
+### E.1 What was missing
+
+1. **`form_webhooks.events` was stored and ignored.**
+   `packages/api/server/utils/webhooks.ts` fanned out `response.created` to
+   every `active` hook without consulting the `events` array.
+2. **Only one event type existed.** No `response.updated`, `payment.paid`,
    `payment.refunded`, `form.published`, `form.unpublished`, or
    `draft.saved`.
-3. **No delivery log.** There is no `form_webhook_deliveries` table, so
-   `lastStatus` / `lastError` / `lastTriggeredAt` are the only history and only
+3. **No delivery log.** There was no `form_webhook_deliveries` table, so
+   `lastStatus` / `lastError` / `lastTriggeredAt` were the only history and only
    for the most recent attempt.
-4. **No retry / backoff / dead-lettering.** Delivery is fire-and-forget once.
+4. **No retry / backoff / dead-lettering.** Delivery was fire-and-forget once.
 5. **No HMAC secret rotation** and no way to reveal/rotate an existing secret
-   (`webhook.update` can overwrite it blind).
+   (`webhook.update` could overwrite it blind).
 6. **No per-delivery payload preview** beyond the hard-coded sample in
-   `webhook.test` (`routes/webhook/route.ts:202-210`).
+   `webhook.test`.
 
-### E.2 Work needed
+### E.2 What shipped
 
-- `form_webhook_deliveries` table: `id`, `webhook_id`, `event`, `requestBody`,
-  `responseStatus`, `responseBody`, `error`, `durationMs`, `attempt`, `nextRetryAt`.
-- Filter in `triggerWebhooks` on `events` (jsonb `@>`).
-- A delivery worker with exponential backoff; expose
-  `webhook.deliveries` (`GET /api/webhooks/{id}/deliveries`) for the builder UI.
+| Gap | Resolution |
+| --- | --- |
+| `events` ignored | `webhookSubscribesTo()` in `@repo/validators` is the single matcher, used by `subscribedHooks()`. `"*"` subscribes to everything. |
+| One event | `WEBHOOK_EVENTS` in `@repo/validators` defines 7 events; `buildWebhookPayload` gives each a typed body. |
+| No log | `form_webhook_deliveries` (migration `0019`) records every attempt with request/response, status, attempt and retry schedule. |
+| No retry | `startWebhookWorker` drains due deliveries; exponential backoff with jitter, 5 attempts, then dead-lettered. Retries only on 408/425/429/5xx/transport errors. |
+| No rotation | `webhook.rotateSecret` and `webhook.revealSecret`. The secret is generated on create and is never returned by `list`. |
+| No preview | `webhook.preview` returns the real payload for any event, built from the production builders. |
 
 ---
 
