@@ -33,7 +33,11 @@ import { verifyTurnstileToken } from "../../utils/turnstile";
 import { parseUserAgent } from "../../utils/ua";
 import { verifyPassword } from "../../utils/password";
 import { notifyNewResponse } from "../../utils/notifications";
-import { triggerWebhooks } from "../../utils/webhooks";
+import {
+  emitPaymentEvent,
+  emitDraftSaved,
+  emitResponseCreated,
+} from "../../utils/webhooks";
 import { consumeResponseQuota, getUserEntitlements } from "../../utils/plans";
 import { signUploadPath } from "@repo/services/upload-signature";
 import {
@@ -420,10 +424,11 @@ export const publicRouter = router({
         : [];
 
       let token: string;
+      let draftId: string;
 
       if (existing.length > 0) {
         token = input.token!;
-        await db
+        const updated = await db
           .update(formDraftsTable)
           .set({
             answers: input.answers,
@@ -431,10 +436,12 @@ export const publicRouter = router({
             expiresAt,
           })
           .where(eq(formDraftsTable.id, existing[0]!.id))
+          .returning({ id: formDraftsTable.id })
           .execute();
+        draftId = updated[0]!.id;
       } else {
         token = randomBytes(32).toString("hex");
-        await db
+        const inserted = await db
           .insert(formDraftsTable)
           .values({
             formId: form.id,
@@ -443,8 +450,18 @@ export const publicRouter = router({
             currentStep: input.currentStep ?? 0,
             expiresAt,
           })
+          .returning({ id: formDraftsTable.id })
           .execute();
+        draftId = inserted[0]!.id;
       }
+
+      void emitDraftSaved({
+        form,
+        draftId,
+        currentStep: input.currentStep ?? 0,
+        answeredFields: Object.keys(input.answers).length,
+        occurredAt: new Date().toISOString(),
+      });
 
       return { token, resumeUrl: `/form/${form.slug}?draft=${token}` };
     }),
@@ -676,8 +693,17 @@ export const publicRouter = router({
       const paymentFields = validatorFields.filter(
         (f) => f.type === "payment",
       );
+      // The full payment row is kept so the `payment.paid` webhook that fires
+      // after the commit carries the amount and provider ids without a re-read.
       const pendingPayments: {
-        row: { id: string };
+        row: {
+          id: string;
+          status: "created" | "paid" | "failed" | "refunded";
+          amountPaise: number;
+          currency: string;
+          razorpayOrderId: string;
+          razorpayPaymentId: string | null;
+        };
         answer: z.infer<typeof PaymentAnswerValueSchema>;
       }[] = [];
 
@@ -716,6 +742,10 @@ export const publicRouter = router({
               status: formPaymentsTable.status,
               amountPaise: formPaymentsTable.amountPaise,
               currency: formPaymentsTable.currency,
+              // Carried so the `payment.paid` webhook emitted after the commit
+              // can name the order and provider payment without a second read.
+              razorpayOrderId: formPaymentsTable.razorpayOrderId,
+              razorpayPaymentId: formPaymentsTable.razorpayPaymentId,
             })
             .from(formPaymentsTable)
             .where(
@@ -760,7 +790,7 @@ export const publicRouter = router({
             status: "paid",
           });
           result.data[field.id] = answer;
-          pendingPayments.push({ row: { id: paymentRow.id }, answer });
+          pendingPayments.push({ row: paymentRow, answer });
         }
       }
 
@@ -850,7 +880,24 @@ export const publicRouter = router({
         submittedAt: responseId.submittedAt.toISOString(),
       });
 
-      void triggerWebhooks({
+      // Captured payments only become real once the response transaction
+      // commits, so `payment.paid` is emitted here rather than inside it.
+      const paidAt = new Date().toISOString();
+      for (const payment of pendingPayments) {
+        void emitPaymentEvent("payment.paid", {
+          form,
+          paymentId: payment.row.id,
+          orderId: payment.row.razorpayOrderId,
+          razorpayPaymentId: payment.row.razorpayPaymentId,
+          amountPaise: payment.row.amountPaise,
+          currency: payment.row.currency,
+          status: "paid",
+          responseId: responseId.id,
+          occurredAt: paidAt,
+        });
+      }
+
+      void emitResponseCreated({
         form,
         fields: validatorFields,
         answers: result.data,

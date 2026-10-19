@@ -31,6 +31,7 @@ import {
 } from "../../utils/schemas";
 import { domainProcedures, parseDomain } from "./domains";
 import { DB, assertFormOwner, insertFields, toVersionField } from "./shared";
+import { emitFormLifecycle } from "../../utils/webhooks";
 
 const TAGS = ["Forms"];
 
@@ -326,14 +327,24 @@ export const formRouter = router({
     .input(idInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
-      await assertFormOwner(input.id, ctx.user.id);
+      const existing = await assertFormOwner(input.id, ctx.user.id);
       const updated = await db
         .update(formsTable)
         .set({ status: "published", archived: false, updatedAt: new Date() })
         .where(eq(formsTable.id, input.id))
         .returning()
         .execute();
-      return serializeForm(updated[0]!);
+      const form = updated[0]!;
+      // Only emit on an actual transition, so republishing an already-live form
+      // does not wake every receiver a second time.
+      if (existing.status !== "published") {
+        void emitFormLifecycle("form.published", {
+          form,
+          previousStatus: existing.status,
+          occurredAt: new Date().toISOString(),
+        });
+      }
+      return serializeForm(form);
     }),
 
   /** Unpublish a form (still editable). */
@@ -344,14 +355,22 @@ export const formRouter = router({
     .input(idInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
-      await assertFormOwner(input.id, ctx.user.id);
+      const existing = await assertFormOwner(input.id, ctx.user.id);
       const updated = await db
         .update(formsTable)
         .set({ status: "unpublished", updatedAt: new Date() })
         .where(eq(formsTable.id, input.id))
         .returning()
         .execute();
-      return serializeForm(updated[0]!);
+      const form = updated[0]!;
+      if (existing.status !== "unpublished") {
+        void emitFormLifecycle("form.unpublished", {
+          form,
+          previousStatus: existing.status,
+          occurredAt: new Date().toISOString(),
+        });
+      }
+      return serializeForm(form);
     }),
 
   /** Clone a form (deep copies fields + options). */
@@ -412,14 +431,24 @@ export const formRouter = router({
     .input(idInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
-      await assertFormOwner(input.id, ctx.user.id);
+      const existing = await assertFormOwner(input.id, ctx.user.id);
       const updated = await db
         .update(formsTable)
         .set({ archived: true, status: "unpublished", updatedAt: new Date() })
         .where(eq(formsTable.id, input.id))
         .returning()
         .execute();
-      return serializeForm(updated[0]!);
+      const form = updated[0]!;
+      // Archiving takes a live form offline, which is a real state change the
+      // owner's integration may need to hear about.
+      if (existing.status !== "unpublished") {
+        void emitFormLifecycle("form.unpublished", {
+          form,
+          previousStatus: existing.status,
+          occurredAt: new Date().toISOString(),
+        });
+      }
+      return serializeForm(form);
     }),
 
   /** Restore an archived form. */

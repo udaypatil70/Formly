@@ -3,6 +3,7 @@ import { logger } from "@repo/logger";
 import { verifyRazorpayWebhookSignature } from "@repo/api/server/utils/razorpay";
 import { applyRazorpayWebhookEvent } from "@repo/api/server/utils/payments";
 import { applyRazorpaySubscriptionEvent } from "@repo/api/server/utils/subscriptions";
+import { emitPaymentTransitions } from "@repo/api/server/utils/webhooks";
 
 /**
  * Razorpay webhook endpoint. Razorpay POSTs signed JSON events here
@@ -36,6 +37,10 @@ export function paymentsRouter(): Router {
       const body = req.body ?? {};
       const paymentResult = await applyRazorpayWebhookEvent(body);
       if (paymentResult.handled) {
+        // Refunds in particular happen entirely on Razorpay's side, so this is
+        // the only place the app learns about them. Forwarding the transition
+        // is what makes `payment.refunded` reachable at all.
+        void emitPaymentTransitions(paymentResult.rows);
         return res
           .status(200)
           .json({ received: true, handled: true, kind: "payment" });

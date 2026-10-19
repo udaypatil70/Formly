@@ -9,11 +9,23 @@ import {
 } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
 import { signUploadPath } from "@repo/services/upload-signature";
+import {
+  buildResponseSchema,
+  type FieldType,
+} from "@repo/validators";
 import { router, protectedProcedure } from "../../trpc";
-import { getFieldsForForm } from "../../utils/form";
+import { getFieldsForForm, toValidatorField } from "../../utils/form";
 import { assertFormOwner } from "../form/route";
+import { emitResponseUpdated } from "../../utils/webhooks";
 
 const TAGS = ["Responses"];
+
+/** Field types whose answers reference rows owned by the response. */
+const IMMUTABLE_ANSWER_TYPES = new Set<FieldType>([
+  "file_upload",
+  "payment",
+  "page_break",
+]);
 
 const listInput = z.object({
   formId: z.string().uuid(),
@@ -235,6 +247,151 @@ export const responseRouter = router({
 
       const filename = `${form.title.replace(/[^a-z0-9]+/gi, "-")}-responses.csv`;
       return { filename, csv: [header, ...rows].join("\n") };
+    }),
+
+  /**
+   * Edit a stored response's answers.
+   *
+   * Validated against the form's own field schema, so an edit cannot smuggle in
+   * a value the submit path would have rejected — otherwise a `response.updated`
+   * event would be able to carry data `response.created` never could.
+   *
+   * `file_upload` and `payment` fields are refused outright: both reference rows
+   * owned by the response (a claimed upload, a captured payment). Re-pointing
+   * one at another row would let an owner attach someone else's file to this
+   * response, so those answers are left exactly as submitted.
+   */
+  update: protectedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/responses/{id}", tags: TAGS } })
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        // Shape is enforced below by the form's own field schema, the same
+        // validation a submission goes through.
+        answers: z.record(z.string().uuid(), z.unknown()),
+      }),
+    )
+    .output(responseViewOutput)
+    .mutation(async ({ ctx, input }) => {
+      const rows = await db
+        .select()
+        .from(responsesTable)
+        .where(eq(responsesTable.id, input.id))
+        .limit(1)
+        .execute();
+      if (rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Response not found" });
+      }
+      const response = rows[0]!;
+      const form = await assertFormOwner(response.formId, ctx.user.id);
+
+      const { fields, optionsByField } = await getFieldsForForm(form.id);
+      const validatorFields = fields.map((field) =>
+        toValidatorField(field, optionsByField.get(field.id)),
+      );
+      const editableIds = new Set(
+        validatorFields
+          .filter((f) => f.type !== "page_break" && !IMMUTABLE_ANSWER_TYPES.has(f.type))
+          .map((f) => f.id),
+      );
+
+      const submittedFieldIds = Object.keys(input.answers);
+      const foreign = submittedFieldIds.filter((id) => !editableIds.has(id));
+      if (foreign.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `These fields cannot be edited: ${foreign.join(", ")}`,
+        });
+      }
+
+      // Merge onto the current answers so omitting a field clears nothing.
+      const existing = await db
+        .select()
+        .from(answersTable)
+        .where(eq(answersTable.responseId, response.id))
+        .execute();
+      const merged: Record<string, unknown> = {};
+      for (const answer of existing) {
+        if (editableIds.has(answer.fieldId)) merged[answer.fieldId] = answer.value;
+      }
+      Object.assign(merged, input.answers);
+
+      const parsed = buildResponseSchema(validatorFields)
+        .partial()
+        .safeParse(merged);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map(
+          (issue) => `${issue.path.join(".")}: ${issue.message}`,
+        );
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Invalid response: ${issues.join("; ")}`,
+        });
+      }
+
+      const changed = Object.entries(input.answers);
+      await db.transaction(async (tx) => {
+        // Replace rather than upsert: an owner clearing a field sends null, and
+        // deleting first keeps one row per field without a unique constraint.
+        if (changed.length > 0) {
+          await tx
+            .delete(answersTable)
+            .where(
+              and(
+                eq(answersTable.responseId, response.id),
+                inArray(
+                  answersTable.fieldId,
+                  changed.map(([fieldId]) => fieldId),
+                ),
+              ),
+            )
+            .execute();
+          await tx
+            .insert(answersTable)
+            .values(
+              changed.map(([fieldId, value]) => ({
+                responseId: response.id,
+                fieldId,
+                value: (parsed.data[fieldId] ?? null) as never,
+              })),
+            )
+            .execute();
+        }
+      });
+
+      const finalAnswers = await db
+        .select()
+        .from(answersTable)
+        .where(eq(answersTable.responseId, response.id))
+        .execute();
+
+      // Emitted from the committed state rather than from what was sent, so a
+      // receiver sees the response as it now stands — including answers this
+      // edit did not touch — exactly as `response.created` delivered it.
+      void emitResponseUpdated({
+        form,
+        fields: validatorFields,
+        answers: Object.fromEntries(
+          finalAnswers.map((answer) => [answer.fieldId, answer.value]),
+        ),
+        responseId: response.id,
+        submittedAt: response.submittedAt.toISOString(),
+      });
+
+      const labelByFieldId = new Map(
+        validatorFields.map((f) => [f.id, f.label] as const),
+      );
+
+      return {
+        id: response.id,
+        submittedAt: response.submittedAt.toISOString(),
+        completedInSeconds: response.completedInSeconds,
+        answers: finalAnswers.map((answer) => ({
+          fieldId: answer.fieldId,
+          fieldLabel: labelByFieldId.get(answer.fieldId) ?? "Unknown field",
+          value: answer.value ?? null,
+        })),
+      };
     }),
 
   /** Delete a single response (cascades its answers). */

@@ -142,30 +142,64 @@ All protected + owner-scoped (`assertFormOwner`):
 
 | Procedure | Method/path | Notes |
 | --- | --- | --- |
-| `list` | GET `/webhooks` | by `formId` |
-| `create` | POST `/webhooks` | url validated, secret optional, events default |
-| `update` | PATCH `/webhooks/{id}` | url / secret / events / active |
-| `delete` | DELETE `/webhooks/{id}` | |
-| `test` | POST `/webhooks/{id}/test` | sends a sample `response.created` payload synchronously |
+| `list` | GET `/webhooks` | by `formId`; never returns the secret |
+| `events` | GET `/webhook-events` | the shared event catalogue |
+| `create` | POST `/webhooks` | url validated, secret generated unless supplied |
+| `update` | PATCH `/webhooks/{id}` | url / events / active; re-enabling clears failure state |
+| `delete` | DELETE `/webhooks/{id}` | cascades the delivery log |
+| `rotateSecret` | POST `/webhooks/{id}/rotate-secret` | returns the new secret once |
+| `revealSecret` | GET `/webhooks/{id}/secret` | owner-only recovery |
+| `test` | POST `/webhooks/{id}/test` | real payload for a chosen event, logged as a delivery |
+| `preview` | GET `/webhooks/preview` | sample payload + headers, sends nothing |
+| `deliveries` | GET `/webhooks/{id}/deliveries` | paginated, filterable by status/event |
+| `redeliver` | POST `/webhooks/deliveries/{id}/redeliver` | re-sends a settled attempt |
+| `resign` | POST `/webhooks/deliveries/{id}/resign` | recompute the signature for debugging a receiver |
 
 Registered as `webhook: webhookRouter` on `serverRouter`.
 
-### Delivery (`packages/api/server/utils/webhooks.ts`)
+### Events (`packages/validators`)
 
-Fire-and-forget on response submit, from
-`public/route.ts → triggerWebhooks(...)`:
+`WEBHOOK_EVENTS` is the single catalogue shared by the API and the builder, so a
+hook can never subscribe to an event the pipeline does not emit.
 
-1. Load active webhooks for the form.
-2. Build the JSON payload:
-   ```json
-   { "event": "response.created", "form": {…}, "response": { id, submittedAt, answers[] } }
-   ```
-3. Sign the exact JSON body with **HMAC-SHA256** using the hook secret and send
-   `x-formly-signature: sha256=<hex>`. No secret → no header.
-4. `POST` with a 10 s timeout; on success/failure update `lastStatus`,
-   `lastError`, `lastTriggeredAt`. Failures never affect the stored response.
+| Event | Emitted from |
+| --- | --- |
+| `response.created` | `public.submitResponse` |
+| `response.updated` | `response.update` (owner edits a response) |
+| `payment.paid` | `public.submitResponse` on commit; `applyRazorpayWebhookEvent` |
+| `payment.refunded` | `applyRazorpayWebhookEvent` — refunds happen entirely on Razorpay's side |
+| `form.published` / `form.unpublished` | `form.publish` / `unpublish` / `archive`, on a real transition only |
+| `draft.saved` | `public.saveDraft` |
 
-Consumers verify integrity by recomputing the HMAC over the raw body.
+`"*"` in a hook's `events` subscribes to all of them.
+
+### Delivery (`packages/api/server/utils/webhooks.ts` + `webhook-delivery.ts`)
+
+Emission (`emitWebhookEvent`) is fire-and-forget, so a slow endpoint never delays
+a submission:
+
+1. Load active hooks for the form and keep those subscribed to the event.
+2. Build the payload via `buildWebhookPayload` and write **one
+   `form_webhook_deliveries` row per hook**, then attempt them.
+3. Sign with **HMAC-SHA256** over `<timestamp>.<body>` and send
+   `x-formly-signature: t=<unix>,v1=<hex>`, alongside `x-formly-event`,
+   `x-formly-delivery` (idempotency key) and `x-formly-attempt`. No secret → no
+   header.
+4. Record status, duration, response body and the retry schedule.
+
+**Retries.** `startWebhookWorker` (`apps/server/src/webhook-worker.ts`) drains
+due rows on an interval. Backoff is exponential with full jitter, capped by
+`WEBHOOK_RETRY_MAX_MS`, and stops after `WEBHOOK_MAX_ATTEMPTS` — the row stays
+visible as `dead`. Only 408/425/429, 5xx and transport failures retry; any other
+4xx is treated as final, since re-sending an identical body cannot change the
+answer. Rows are claimed with `FOR UPDATE SKIP LOCKED`, so multiple instances are
+safe and a worker that dies releases its lease.
+
+**Auto-disable.** `WEBHOOK_AUTO_DISABLE_FAILURES` consecutive failures (default
+25) switch a hook off with a reason; re-enabling from the UI clears it.
+
+Consumers verify integrity by recomputing the HMAC over `<timestamp>.<raw body>`
+and rejecting anything outside their replay window.
 
 ---
 
