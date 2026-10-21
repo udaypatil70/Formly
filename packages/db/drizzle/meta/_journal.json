@@ -141,6 +141,13 @@
       "when": 1792387131663,
       "tag": "0019_blushing_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792582502544,
+      "tag": "0020_futuristic_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

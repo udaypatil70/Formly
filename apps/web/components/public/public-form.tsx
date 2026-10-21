@@ -674,7 +674,9 @@ function PaymentInput({
 
       const checkout = new window.Razorpay({
         key: order.keyId,
-        amount: order.amount * 100,
+        // Minor units straight from the server; multiplying by 100 here
+        // would be wrong for zero/three-decimal currencies.
+        amount: order.amountPaise,
         currency: order.currency,
         name: formTitle || "Payment",
         description: field.label,

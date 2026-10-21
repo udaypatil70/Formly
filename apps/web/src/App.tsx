@@ -40,6 +40,9 @@ const ProfilePage = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import("~/pages/analytics-page").then((m) => ({ default: m.AnalyticsPage })),
 );
+const PaymentsPage = lazy(() =>
+  import("~/pages/payments-page").then((m) => ({ default: m.PaymentsPage })),
+);
 const CreateFormPage = lazy(() =>
   import("~/pages/create-form-page").then((m) => ({ default: m.CreateFormPage })),
 );
@@ -86,6 +89,7 @@ export function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/responses/:formId" element={<ResponsesPage />} />
           <Route path="/analytics/:formId" element={<AnalyticsPage />} />
+          <Route path="/payments/:formId" element={<PaymentsPage />} />
         </Route>
         <Route element={<RequireAdmin><AdminShell /></RequireAdmin>}>
           <Route path="/admin" element={<AdminOverviewPage />} />

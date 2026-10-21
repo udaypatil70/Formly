@@ -13,7 +13,11 @@ import {
   razorpayConfigured,
   verifyRazorpaySubscriptionSignature,
 } from "../../utils/razorpay";
-import { isPaidStatus } from "../../utils/subscriptions";
+import {
+  isEndedStatus,
+  isPaidStatus,
+  reconcileUserSubscription,
+} from "../../utils/subscriptions";
 
 const TAGS = ["Subscriptions"];
 
@@ -23,6 +27,8 @@ const subscriptionOutput = z.object({
   subscriptionStatus: z.string().nullable(),
   company: z.string().nullable(),
   jobTitle: z.string().nullable(),
+  planUpdatedAt: z.string().nullable(),
+  subscriptionSyncedAt: z.string().nullable(),
   razorpayConfigured: z.boolean(),
   proPlanConfigured: z.boolean(),
 });
@@ -33,37 +39,82 @@ const updateProfileInput = z.object({
   jobTitle: z.string().trim().max(120).nullable().optional(),
 });
 
+type SubscriptionView = z.infer<typeof subscriptionOutput>;
+
+async function readSubscriptionView(userId: string): Promise<SubscriptionView> {
+  const [row] = await db
+    .select({
+      plan: usersTable.plan,
+      subscriptionId: usersTable.subscriptionId,
+      subscriptionStatus: usersTable.subscriptionStatus,
+      company: usersTable.company,
+      jobTitle: usersTable.jobTitle,
+      planUpdatedAt: usersTable.planUpdatedAt,
+      subscriptionSyncedAt: usersTable.subscriptionSyncedAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1)
+    .execute();
+
+  return {
+    plan: row?.plan ?? "free",
+    subscriptionId: row?.subscriptionId ?? null,
+    subscriptionStatus: row?.subscriptionStatus ?? null,
+    company: row?.company ?? null,
+    jobTitle: row?.jobTitle ?? null,
+    planUpdatedAt: row?.planUpdatedAt?.toISOString() ?? null,
+    subscriptionSyncedAt: row?.subscriptionSyncedAt?.toISOString() ?? null,
+    razorpayConfigured: razorpayConfigured(),
+    proPlanConfigured: Boolean(process.env.RAZORPAY_PRO_PLAN_ID),
+  };
+}
+
 export const subscriptionRouter = router({
-  /** Current plan + subscription state for the signed-in user. */
+  /**
+   * Current plan + subscription state for the signed-in user.
+   *
+   * When the persisted state is older than the staleness window, Razorpay is
+   * consulted first. This repairs a missed webhook the next time the user
+   * opens their profile instead of leaving them stuck on the wrong plan.
+   */
   getMySubscription: protectedProcedure
     .meta({
       openapi: { method: "GET", path: "/subscriptions/me", tags: TAGS },
     })
+    .input(z.object({ refresh: z.boolean().optional() }).optional())
+    .output(subscriptionOutput)
+    .query(async ({ ctx, input }) => {
+      await reconcileUserSubscription(ctx.user.id, {
+        force: input?.refresh ?? false,
+      });
+      return readSubscriptionView(ctx.user.id);
+    }),
+
+  /**
+   * Force a Razorpay state check. Used by the profile's "Sync now" button and
+   * safe to call repeatedly — it only writes when the provider disagrees.
+   */
+  syncSubscription: protectedProcedure
+    .meta({
+      openapi: { method: "POST", path: "/subscriptions/sync", tags: TAGS },
+    })
     .input(z.undefined())
     .output(subscriptionOutput)
-    .query(async ({ ctx }) => {
-      const [row] = await db
-        .select({
-          plan: usersTable.plan,
-          subscriptionId: usersTable.subscriptionId,
-          subscriptionStatus: usersTable.subscriptionStatus,
-          company: usersTable.company,
-          jobTitle: usersTable.jobTitle,
-        })
-        .from(usersTable)
-        .where(eq(usersTable.id, ctx.user.id))
-        .limit(1)
-        .execute();
+    .mutation(async ({ ctx }) => {
+      const limited = await rateLimit(`sub:sync:${ctx.user.id}`, {
+        limit: 10,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many sync requests, please try again shortly.",
+        });
+      }
 
-      return {
-        plan: row?.plan ?? "free",
-        subscriptionId: row?.subscriptionId ?? null,
-        subscriptionStatus: row?.subscriptionStatus ?? null,
-        company: row?.company ?? null,
-        jobTitle: row?.jobTitle ?? null,
-        razorpayConfigured: razorpayConfigured(),
-        proPlanConfigured: Boolean(process.env.RAZORPAY_PRO_PLAN_ID),
-      };
+      await reconcileUserSubscription(ctx.user.id, { force: true });
+      return readSubscriptionView(ctx.user.id);
     }),
 
   /**
@@ -124,7 +175,9 @@ export const subscriptionRouter = router({
         .limit(1)
         .execute();
 
-      if (row?.subscriptionId) {
+      // Re-use a live subscription, but never hand Checkout a subscription
+      // Razorpay has already ended (cancelled/completed/halted).
+      if (row?.subscriptionId && !isEndedStatus(row.subscriptionStatus)) {
         return {
           subscriptionId: row.subscriptionId,
           keyId: razorpayConfig()!.keyId,
@@ -145,6 +198,7 @@ export const subscriptionRouter = router({
         .set({
           subscriptionId: subscription.id,
           subscriptionStatus: subscription.status ?? "created",
+          subscriptionSyncedAt: new Date(),
         })
         .where(eq(usersTable.id, ctx.user.id))
         .execute();
@@ -177,7 +231,12 @@ export const subscriptionRouter = router({
         signature: z.string(),
       }),
     )
-    .output(z.object({ activated: z.boolean() }))
+    .output(
+      z.object({
+        activated: z.boolean(),
+        subscriptionStatus: z.string().nullable(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       if (!verifyRazorpaySubscriptionSignature(input)) {
         throw new TRPCError({
@@ -203,27 +262,39 @@ export const subscriptionRouter = router({
         });
       }
 
+      // Fail closed: if Razorpay cannot be reached, the client must not be
+      // upgraded on the strength of an unverified claim. The webhook (or a
+      // later reconciliation) is the source of truth.
       const subscription = await fetchRazorpaySubscription(
         input.subscriptionId,
       ).catch(() => null);
       const paid = subscription
         ? isPaidStatus(subscription.status)
-        : true;
+        : false;
 
-      if (paid) {
-        await db
-          .update(usersTable)
-          .set({
-            plan: "pro",
-            subscriptionId: input.subscriptionId,
-            subscriptionStatus: "active",
-            planUpdatedAt: new Date(),
-          })
-          .where(eq(usersTable.id, ctx.user.id))
-          .execute();
-      }
+      await db
+        .update(usersTable)
+        .set({
+          subscriptionId: input.subscriptionId,
+          subscriptionSyncedAt: new Date(),
+          ...(subscription?.status
+            ? { subscriptionStatus: subscription.status }
+            : {}),
+          ...(paid
+            ? {
+                plan: "pro" as const,
+                subscriptionStatus: "active",
+                planUpdatedAt: new Date(),
+              }
+            : {}),
+        })
+        .where(eq(usersTable.id, ctx.user.id))
+        .execute();
 
-      return { activated: paid };
+      return {
+        activated: paid,
+        subscriptionStatus: subscription?.status ?? null,
+      };
     }),
 
   /** Cancels the user's Razorpay subscription and downgrades to Free. */
@@ -253,6 +324,7 @@ export const subscriptionRouter = router({
           plan: "free",
           subscriptionStatus: "cancelled",
           planUpdatedAt: new Date(),
+          subscriptionSyncedAt: new Date(),
         })
         .where(eq(usersTable.id, ctx.user.id))
         .execute();
