@@ -100,6 +100,17 @@ export interface RazorpayPayment {
   entity: string;
 }
 
+export interface RazorpayRefund {
+  id: string;
+  payment_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  speed_processed?: string;
+  created_at?: number;
+  notes?: Record<string, string> | null;
+}
+
 export interface RazorpaySubscription {
   id: string;
   plan_id: string;
@@ -147,6 +158,31 @@ export async function cancelRazorpaySubscription(
   return razorpayFetch<RazorpaySubscription>(
     "POST",
     `/subscriptions/${subscriptionId}/cancel`,
+  );
+}
+
+/**
+ * Issues a refund for a captured Razorpay payment.
+ *
+ * Omitting `amountPaise` refunds the full remaining amount. Partial refunds
+ * are supported by passing an explicit amount.
+ */
+export async function createRazorpayRefund(options: {
+  paymentId: string;
+  amountPaise?: number;
+  notes?: Record<string, string>;
+  speed?: "normal" | "optimum";
+}): Promise<RazorpayRefund> {
+  return razorpayFetch<RazorpayRefund>(
+    "POST",
+    `/payments/${encodeURIComponent(options.paymentId)}/refund`,
+    {
+      ...(options.amountPaise !== undefined
+        ? { amount: options.amountPaise }
+        : {}),
+      ...(options.speed ? { speed: options.speed } : {}),
+      notes: options.notes ?? {},
+    },
   );
 }
 

@@ -465,14 +465,22 @@ export const formPaymentsTable = pgTable(
     amountPaise: integer("amount_paise").notNull(),
     currency: varchar("currency", { length: 3 }).default("INR").notNull(),
     status: paymentStatusEnum("status").default("created").notNull(),
+    /** Portion of `amountPaise` already returned; supports partial refunds. */
+    refundedAmountPaise: integer("refunded_amount_paise")
+      .default(0)
+      .notNull(),
+    /** Most recent Razorpay refund id, for support/debugging. */
+    razorpayRefundId: varchar("razorpay_refund_id", { length: 255 }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     paidAt: timestamp("paid_at"),
+    refundedAt: timestamp("refunded_at"),
   },
   (table) => [
     index("form_payments_form_id_idx").on(table.formId),
     index("form_payments_field_id_idx").on(table.fieldId),
     index("form_payments_order_id_idx").on(table.razorpayOrderId),
+    index("form_payments_payment_id_idx").on(table.razorpayPaymentId),
     index("form_payments_status_idx").on(table.status),
   ],
 );

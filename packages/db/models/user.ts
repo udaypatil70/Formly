@@ -31,6 +31,8 @@ export const usersTable = pgTable("users", {
   subscriptionId: varchar("subscription_id", { length: 64 }),
   subscriptionStatus: varchar("subscription_status", { length: 32 }),
   planUpdatedAt: timestamp("plan_updated_at"),
+  /** Last time the subscription was reconciled against Razorpay. */
+  subscriptionSyncedAt: timestamp("subscription_synced_at"),
 
   company: varchar("company", { length: 120 }),
   jobTitle: varchar("job_title", { length: 120 }),

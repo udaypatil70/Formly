@@ -323,6 +323,60 @@ export const PaymentAnswerValueSchema = z.object({
 });
 export type PaymentAnswerValue = z.infer<typeof PaymentAnswerValueSchema>;
 
+// ─── Currency minor units ──────────────────────────────────
+// Razorpay, like most gateways, expects amounts in the currency's smallest
+// unit. Most currencies use 2 decimals but several do not, so a blanket
+// `amount * 100` silently overcharges (or undercharges) those.
+// Shared by the API and the web client so checkout, ledger and refunds agree.
+
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "BIF",
+  "CLP",
+  "DJF",
+  "GNF",
+  "ISK",
+  "JPY",
+  "KMF",
+  "KRW",
+  "MGA",
+  "PYG",
+  "RWF",
+  "UGX",
+  "VND",
+  "VUV",
+  "XAF",
+  "XOF",
+  "XPF",
+]);
+
+const THREE_DECIMAL_CURRENCIES = new Set([
+  "BHD",
+  "IQD",
+  "JOD",
+  "KWD",
+  "LYD",
+  "OMR",
+  "TND",
+]);
+
+/** How many minor units make one whole unit of `currency`. */
+export function currencyMinorUnitFactor(currency: string): number {
+  const code = currency.trim().toUpperCase();
+  if (ZERO_DECIMAL_CURRENCIES.has(code)) return 1;
+  if (THREE_DECIMAL_CURRENCIES.has(code)) return 1000;
+  return 100;
+}
+
+/** Whole currency units → minor units (e.g. ₹499 → 49900 paise). */
+export function toMinorUnits(amount: number, currency: string): number {
+  return Math.round(amount * currencyMinorUnitFactor(currency));
+}
+
+/** Minor units → whole currency units (e.g. 49900 paise → ₹499). */
+export function fromMinorUnits(amount: number, currency: string): number {
+  return amount / currencyMinorUnitFactor(currency);
+}
+
 export const AnswerValueSchema = z.union([
   z.string(),
   z.number(),

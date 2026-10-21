@@ -4,6 +4,7 @@ import {
   BriefcaseIcon,
   CheckIcon,
   CreditCardIcon,
+  RefreshCwIcon,
   RocketIcon,
   UserIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
@@ -38,6 +40,7 @@ const PLAN_DESCRIPTION: Record<string, string> = {
 };
 
 export function ProfilePage() {
+  const utils = trpc.useUtils();
   const session = trpc.auth.getSession.useQuery();
   const subscription = trpc.subscription.getMySubscription.useQuery();
 
@@ -46,6 +49,7 @@ export function ProfilePage() {
   const verifyPayment =
     trpc.subscription.verifySubscriptionPayment.useMutation();
   const cancelSub = trpc.subscription.cancelSubscription.useMutation();
+  const syncSub = trpc.subscription.syncSubscription.useMutation();
 
   const user = session.data?.user;
 
@@ -53,6 +57,7 @@ export function ProfilePage() {
   const [company, setCompany] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -90,7 +95,7 @@ export function ProfilePage() {
             toast.success(
               result.activated
                 ? "Welcome to Pro!"
-                : "Payment received — activating your Pro plan…",
+                : "Payment received — Razorpay is still confirming it. Use “Sync status” in a moment.",
             );
           } catch {
             toast.success("Payment received — your plan is being activated.");
@@ -109,15 +114,29 @@ export function ProfilePage() {
   };
 
   const handleCancel = async () => {
-    if (!window.confirm("Cancel your Pro subscription? You'll lose Pro features at the end of the current billing cycle.")) {
-      return;
-    }
     try {
       await cancelSub.mutateAsync();
       toast.success("Subscription cancelled");
+      setConfirmCancel(false);
       await Promise.all([session.refetch(), subscription.refetch()]);
     } catch {
       toast.error("Couldn't cancel the subscription");
+    }
+  };
+
+  const handleSync = async () => {
+    try {
+      await syncSub.mutateAsync();
+      await Promise.all([
+        subscription.refetch(),
+        session.refetch(),
+        utils.subscription.getMySubscription.invalidate(),
+      ]);
+      toast.success("Subscription synced with Razorpay");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't sync subscription",
+      );
     }
   };
 
@@ -254,14 +273,24 @@ export function ProfilePage() {
             </div>
 
             {plan === "pro" && (
-              <p
-                className="text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
-              >
-                <CheckIcon className="size-4 text-emerald-500" />
-                Subscription{" "}
-                {subscription.data?.subscriptionStatus ?? "active"} ·{" "}
-                {subscription.data?.subscriptionId ?? "syncing"}
-              </p>
+              <div className="text-muted-foreground flex flex-col gap-1 rounded-md border px-3 py-2 text-xs">
+                <p className="flex items-center gap-2">
+                  <CheckIcon className="size-4 shrink-0 text-emerald-500" />
+                  Subscription{" "}
+                  <span className="text-foreground font-medium">
+                    {subscription.data?.subscriptionStatus ?? "active"}
+                  </span>
+                </p>
+                <p className="truncate font-mono">
+                  {subscription.data?.subscriptionId ?? "syncing"}
+                </p>
+                <p>
+                  Last synced{" "}
+                  {subscription.data?.subscriptionSyncedAt
+                    ? new Date(subscription.data.subscriptionSyncedAt).toLocaleString()
+                    : "never"}
+                </p>
+              </div>
             )}
 
             <p className="text-muted-foreground text-sm">
@@ -287,15 +316,26 @@ export function ProfilePage() {
                 )}
               </>
             ) : plan === "pro" ? (
-              <Button
-                variant="outline"
-                onClick={() => void handleCancel()}
-                disabled={cancelSub.isPending}
-                className="w-full"
-              >
-                {cancelSub.isPending ? <Spinner /> : null}
-                Cancel subscription
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleSync()}
+                  disabled={syncSub.isPending || cancelSub.isPending}
+                  className="w-full"
+                >
+                  {syncSub.isPending ? <Spinner /> : <RefreshCwIcon />}
+                  Sync status
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmCancel(true)}
+                  disabled={cancelSub.isPending || syncSub.isPending}
+                  className="text-muted-foreground w-full"
+                >
+                  {cancelSub.isPending ? <Spinner /> : null}
+                  Cancel subscription
+                </Button>
+              </>
             ) : (
               <Button asChild className="w-full">
                 <a
@@ -312,6 +352,17 @@ export function ProfilePage() {
           </CardFooter>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        title="Cancel Pro subscription?"
+        description="You'll lose Pro features at the end of the current billing cycle. This cannot be undone from this page."
+        confirmLabel="Cancel subscription"
+        destructive
+        busy={cancelSub.isPending}
+        onConfirm={() => void handleCancel()}
+      />
     </div>
   );
 }

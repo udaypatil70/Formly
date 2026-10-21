@@ -3,3 +3,4 @@ export * from "./models/auth";
 export * from "./models/form";
 export * from "./models/rate-limit";
 export * from "./models/plan";
+export * from "./models/payment";

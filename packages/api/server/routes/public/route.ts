@@ -17,6 +17,8 @@ import {
   AnswerValueSchema,
   FileAnswerValueSchema,
   PaymentAnswerValueSchema,
+  toMinorUnits,
+  fromMinorUnits,
 } from "@repo/validators";
 import { router, publicProcedure } from "../../trpc";
 import {
@@ -772,8 +774,10 @@ export const publicRouter = router({
             });
           }
 
-          const expectedPaise = Math.round(
-            (field.validationRules?.amount ?? 0) * 100,
+          // Currency-aware conversion: JPY has no minor unit, KWD has three.
+          const expectedPaise = toMinorUnits(
+            field.validationRules?.amount ?? 0,
+            paymentRow.currency,
           );
           if (expectedPaise <= 0 || paymentRow.amountPaise !== expectedPaise) {
             throw new TRPCError({
@@ -785,7 +789,7 @@ export const publicRouter = router({
           const answer = PaymentAnswerValueSchema.parse({
             paymentId: entry.paymentId,
             orderId: entry.orderId,
-            amount: expectedPaise / 100,
+            amount: fromMinorUnits(expectedPaise, paymentRow.currency),
             currency: paymentRow.currency,
             status: "paid",
           });

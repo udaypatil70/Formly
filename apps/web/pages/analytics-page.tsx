@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -17,7 +17,6 @@ import { format } from "date-fns";
 import {
   ArrowLeftIcon,
   ChartColumnIcon,
-  CreditCardIcon,
   EyeIcon,
   InboxIcon,
   TrendingUpIcon,
@@ -25,6 +24,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 
 import { trpc } from "~/trpc/client";
+import { PaymentsPanel } from "~/components/payments/payments-panel";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -326,7 +326,11 @@ export function AnalyticsPage() {
           <PieCard title="Browsers" data={browserData} />
         </div>
 
-        <PaymentsCard formId={formId ?? ""} />
+        <PaymentsPanel
+          formId={formId ?? ""}
+          variant="compact"
+          onViewAll={() => navigate(`/payments/${formId ?? ""}`)}
+        />
 
         <div className="space-y-4">
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
@@ -380,7 +384,7 @@ export function AnalyticsPage() {
             <span>Analytics</span>
             {formQuery.data && (
               <span className="text-muted-foreground min-w-0 break-words text-base font-normal">
-                · {formQuery.data.form.title}
+                Â· {formQuery.data.form.title}
               </span>
             )}
           </h1>
@@ -535,7 +539,7 @@ function DropOffCard({
           <div className="flex items-center justify-between pl-1 text-xs">
             <span className="text-muted-foreground">Drop-off before submit</span>
             <span className={cn(completionRate >= 0.4 ? "text-muted-foreground" : "font-medium text-red-500")}>
-              {dropPct}% · avg {formatDuration(avgCompletionSeconds)}
+              {dropPct}% Â· avg {formatDuration(avgCompletionSeconds)}
             </span>
           </div>
           <FunnelRow
@@ -573,7 +577,7 @@ function DropOffCard({
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="line-clamp-1">{field.label}</span>
                     <span className="text-muted-foreground shrink-0 tabular-nums">
-                      {field.totalResponses > 0 ? `${pct}%` : "\u2014"} ·{" "}
+                      {field.totalResponses > 0 ? `${pct}%` : "\u2014"} Â·{" "}
                       {field.answered}/{field.totalResponses}
                     </span>
                   </div>
@@ -609,7 +613,7 @@ function FunnelRow({
       <div className="flex items-center justify-between gap-3 text-sm">
         <span>{label}</span>
         <span className="text-muted-foreground tabular-nums">
-          {count.toLocaleString()} · {pct}%
+          {count.toLocaleString()} Â· {pct}%
         </span>
       </div>
       <div className="bg-muted h-3 w-full overflow-hidden rounded-md">
@@ -753,7 +757,7 @@ function FieldBreakdownCard({
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="line-clamp-1">{item.value}</span>
               <span className="text-muted-foreground shrink-0 tabular-nums">
-                {total > 0 ? Math.round((item.count / total) * 100) : 0}% ·{" "}
+                {total > 0 ? Math.round((item.count / total) * 100) : 0}% Â·{" "}
                 {item.count}
               </span>
             </div>
@@ -770,105 +774,6 @@ function FieldBreakdownCard({
         ))}
       </CardContent>
     </Card>
-  );
-}
-
-function PaymentsCard({ formId }: { formId: string }) {
-  const paymentsQuery = trpc.payment.list.useQuery(
-    { formId },
-    { enabled: !!formId, refetchInterval: 10_000 },
-  );
-
-  const data = paymentsQuery.data;
-  if (!data || data.totals.count === 0) return null;
-
-  const currency = data.payments[0]?.currency ?? "INR";
-  const fmt = (paise: number) =>
-    `${currency} ${paise.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCardIcon className="text-muted-foreground size-4" />
-            Payments
-            <Badge variant="secondary" className="gap-1.5">
-              <span className="relative flex size-2">
-                <span className="bg-emerald-500 absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" />
-                <span className="bg-emerald-500 relative inline-flex size-2 rounded-full" />
-              </span>
-              Live
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            Razorpay orders for this form, refreshed every 10s.
-          </CardDescription>
-        </div>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <LedgerStat label="Collected" value={fmt(data.totals.paidAmountPaise)} hint={`${data.totals.paidCount} paid`} />
-          <LedgerStat label="Pending" value={fmt(data.totals.pendingAmountPaise)} hint={`${data.totals.pendingCount} open`} />
-          <LedgerStat label="Refunded" value={fmt(data.totals.refundedAmountPaise)} hint={`${data.totals.refundedCount} refunded`} />
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y">
-          {data.payments.slice(0, 25).map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-3 px-6 py-2.5 text-sm">
-              <div className="min-w-0">
-                <p className="line-clamp-1">{p.fieldLabel ?? "Payment"}</p>
-                <p className="text-muted-foreground text-xs tabular-nums">
-                  {format(new Date(p.createdAt), "MMM d, HH:mm")} · {p.orderId}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="font-mono tabular-nums">{fmt(p.amountPaise)}</span>
-                <PaymentStatusBadge status={p.status} />
-              </div>
-            </div>
-          ))}
-        </div>
-        {data.payments.length > 25 ? (
-          <p className="text-muted-foreground border-t px-6 py-2 text-xs">
-            Showing 25 of {data.payments.length} orders.
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function LedgerStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="min-w-[5rem]">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="font-medium tabular-nums">{value}</p>
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
-    </div>
-  );
-}
-
-function PaymentStatusBadge({ status }: { status: string }) {
-  const classes =
-    status === "paid"
-      ? "bg-emerald-500/15 text-emerald-400"
-      : status === "refunded"
-        ? "bg-amber-500/15 text-amber-400"
-        : status === "failed"
-          ? "bg-destructive/15 text-destructive"
-          : "bg-muted text-muted-foreground";
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${classes}`}>
-      {status}
-    </span>
   );
 }
 
