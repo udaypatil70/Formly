@@ -1,25 +1,27 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOutIcon } from "lucide-react";
+import { toast } from "sonner";
 
-import { getAuthEndpoints } from "~/lib/api-origin";
+import { trpc } from "~/trpc/client";
 import { Button } from "~/components/ui/button";
 
 export function SignOutButton() {
   const navigate = useNavigate();
+  const utils = trpc.useUtils();
+  const signOut = trpc.auth.signOut.useMutation();
   const [pending, setPending] = useState(false);
 
   const handleSignOut = async () => {
     setPending(true);
     try {
-      await fetch(getAuthEndpoints().signOut, {
-        method: "POST",
-        credentials: "include",
-      });
+      await signOut.mutateAsync();
+      utils.auth.getSession.setData(undefined, { user: null, session: null });
+      navigate("/login", { replace: true });
     } catch {
-      // redirect even if the request fails
+      toast.error("Couldn't sign out. Please try again.");
+      setPending(false);
     }
-    navigate("/login", { replace: true });
   };
 
   return (

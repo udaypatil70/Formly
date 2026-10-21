@@ -1,15 +1,90 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { toNodeHandler } from "better-auth/node";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { db } from "@repo/db";
-import {
-  usersTable,
-  sessionsTable,
-  accountsTable,
-  verificationsTable,
-} from "@repo/db/schema";
+import { usersTable, sessionsTable, accountsTable, verificationsTable } from "@repo/db/schema";
 import { env } from "./env";
+import { isEmailConfigured, sendEmailVerificationEmail, sendPasswordResetEmail } from "./email";
+import { rateLimit } from "./rate-limit";
+import { verifyTurnstileToken } from "./turnstile";
+
+const emailVerificationEnabled = isEmailConfigured();
+const forgotPasswordEnabled = emailVerificationEnabled && env.FORGOT_PASSWORD_ENABLED;
+const requireEmailVerification = emailVerificationEnabled && env.REQUIRE_EMAIL_VERIFICATION;
+
+/** Public flags the frontend uses to decide which auth UI to show. */
+export const authFeatures = {
+  emailVerificationEnabled,
+  forgotPasswordEnabled,
+  requireEmailVerification,
+} as const;
+
+function hashKey(value: string): string {
+  return createHash("sha256").update(`formly-auth:${value}`).digest("hex");
+}
+
+/** Only trust a forwarded IP header when TRUST_PROXY declares one. */
+function resolveAuthIp(headers?: Headers): string | undefined {
+  const trustProxy = env.TRUST_PROXY?.toLowerCase().trim();
+  if (!trustProxy) return undefined;
+
+  const raw = headers?.get(trustProxy);
+  return raw?.split(",")[0]?.trim() || undefined;
+}
+
+async function enforceAuthRateLimit(action: "signin" | "signup", email: string, ip?: string) {
+  const buckets = [
+    {
+      key: `auth:${action}:email:${hashKey(email)}`,
+      limit: action === "signup" ? 5 : 10,
+    },
+  ];
+
+  if (ip) {
+    buckets.push({
+      key: `auth:${action}:ip:${hashKey(ip)}`,
+      limit: action === "signup" ? 10 : 30,
+    });
+  }
+
+  for (const bucket of buckets) {
+    const result = await rateLimit(bucket.key, {
+      limit: bucket.limit,
+      windowMs: 15 * 60_000,
+    });
+    if (result.limited) {
+      throw new APIError("TOO_MANY_REQUESTS", {
+        message: "Too many attempts. Please try again later.",
+      });
+    }
+  }
+}
+
+const authGuard = createAuthMiddleware(async (ctx) => {
+  if (ctx.path !== "/sign-in/email" && ctx.path !== "/sign-up/email") {
+    return;
+  }
+
+  const action = ctx.path === "/sign-up/email" ? "signup" : "signin";
+  const email = typeof ctx.body?.email === "string" ? ctx.body.email.trim().toLowerCase() : "";
+  const ip = resolveAuthIp(ctx.headers ?? undefined);
+
+  if (email) {
+    await enforceAuthRateLimit(action, email, ip);
+  }
+
+  const turnstileOk = await verifyTurnstileToken(
+    ctx.headers?.get("x-turnstile-token") ?? undefined,
+    ip,
+  );
+  if (!turnstileOk) {
+    throw new APIError("BAD_REQUEST", {
+      message: "Bot verification failed. Please retry.",
+    });
+  }
+});
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -35,8 +110,59 @@ export const auth = betterAuth({
     // password hashing, and set an explicit floor for new accounts.
     minPasswordLength: 8,
     maxPasswordLength: 128,
+    // Enforcing verification is opt-in: existing deployments may have
+    // unverified accounts, and local development often has no SMTP.
+    requireEmailVerification,
+    revokeSessionsOnPasswordReset: true,
+    ...(forgotPasswordEnabled
+      ? {
+          sendResetPassword: async ({
+            user,
+            url,
+          }: {
+            user: { email: string; name: string };
+            url: string;
+          }) => {
+            await sendPasswordResetEmail({
+              to: user.email,
+              name: user.name,
+              resetUrl: url,
+            });
+          },
+          resetPasswordTokenExpiresIn: 60 * 60,
+        }
+      : {}),
+  },
+  ...(emailVerificationEnabled
+    ? {
+        emailVerification: {
+          sendVerificationEmail: async ({
+            user,
+            url,
+          }: {
+            user: { email: string; name: string };
+            url: string;
+          }) => {
+            await sendEmailVerificationEmail({
+              to: user.email,
+              name: user.name,
+              verificationUrl: url,
+            });
+          },
+          sendOnSignUp: true,
+          sendOnSignIn: requireEmailVerification,
+          autoSignInAfterVerification: true,
+          expiresIn: 60 * 60,
+        },
+      }
+    : {}),
+  hooks: {
+    before: authGuard,
   },
   user: {
+    deleteUser: {
+      enabled: true,
+    },
     additionalFields: {
       plan: {
         type: "string",

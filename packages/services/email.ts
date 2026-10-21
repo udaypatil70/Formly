@@ -28,9 +28,7 @@ function getTransporter(): Transporter {
       host: env.SMTP_HOST!,
       port: env.SMTP_PORT,
       secure: env.SMTP_PORT === 465,
-      auth: env.SMTP_USER
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD ?? "" }
-        : undefined,
+      auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD ?? "" } : undefined,
     });
   }
   return transporter;
@@ -130,8 +128,7 @@ export async function sendConfirmationEmail({
   thankYouMessage?: string | null;
   formUrl?: string;
 }) {
-  const friendlyThankYou =
-    thankYouMessage?.trim() || "Thanks for submitting your response.";
+  const friendlyThankYou = thankYouMessage?.trim() || "Thanks for submitting your response.";
 
   const safeTitle = escapeHtml(formTitle);
   const safeThankYou = escapeHtml(friendlyThankYou);
@@ -151,6 +148,58 @@ export async function sendConfirmationEmail({
     subject: `We received your response to "${formTitle}"`,
     text: `Your response to "${formTitle}" was received successfully. ${friendlyThankYou}`,
     html: layout(`Response received`, body),
+  });
+}
+
+/** Verification link sent after sign-up or when a user requests a new one. */
+export async function sendEmailVerificationEmail({
+  to,
+  name,
+  verificationUrl,
+}: {
+  to: string;
+  name: string;
+  verificationUrl: string;
+}) {
+  const safeName = escapeHtml(name.trim() || "there");
+  const body = `
+    <p style="margin:0 0 16px;">Hi ${safeName},</p>
+    <p style="margin:0 0 16px;">Confirm your email address to finish setting up your Formly account.</p>
+    <a href="${escapeUrl(verificationUrl)}" style="display:inline-block;margin-top:8px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">Verify email</a>
+    <p style="margin:16px 0 0;color:#71717a;font-size:13px;">This link expires in 1 hour. If you didn't create an account, you can ignore this email.</p>
+  `;
+
+  await sendEmail({
+    to,
+    subject: "Verify your Formly email",
+    text: `Hi ${name.trim() || "there"},\n\nConfirm your email address to finish setting up your Formly account:\n${verificationUrl}\n\nThis link expires in 1 hour. If you didn't create an account, you can ignore this email.`,
+    html: layout("Verify your email", body),
+  });
+}
+
+/** Password reset link sent after a request from the forgot-password page. */
+export async function sendPasswordResetEmail({
+  to,
+  name,
+  resetUrl,
+}: {
+  to: string;
+  name: string;
+  resetUrl: string;
+}) {
+  const safeName = escapeHtml(name.trim() || "there");
+  const body = `
+    <p style="margin:0 0 16px;">Hi ${safeName},</p>
+    <p style="margin:0 0 16px;">We received a request to reset the password for your Formly account.</p>
+    <a href="${escapeUrl(resetUrl)}" style="display:inline-block;margin-top:8px;padding:10px 20px;background-color:#6d28d9;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;">Reset password</a>
+    <p style="margin:16px 0 0;color:#71717a;font-size:13px;">This link expires in 1 hour. If you didn't request it, you can ignore this email and your password will stay the same.</p>
+  `;
+
+  await sendEmail({
+    to,
+    subject: "Reset your Formly password",
+    text: `Hi ${name.trim() || "there"},\n\nReset the password for your Formly account:\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request it, you can ignore this email and your password will stay the same.`,
+    html: layout("Reset your password", body),
   });
 }
 

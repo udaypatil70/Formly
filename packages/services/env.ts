@@ -14,8 +14,7 @@ const originList = z
       return entries.length > 0 && entries.every((entry) => isHttpUrl(entry));
     },
     {
-      message:
-        "FRONTEND_URL must be a comma-separated list of http(s) origins",
+      message: "FRONTEND_URL must be a comma-separated list of http(s) origins",
     },
   );
 
@@ -35,6 +34,13 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** Env flags are strings; avoid `z.coerce.boolean()`, where "false" is truthy. */
+const booleanFlag = (defaultValue: boolean) =>
+  z
+    .enum(["true", "false"])
+    .default(defaultValue ? "true" : "false")
+    .transform((value) => value === "true");
+
 /** Placeholders that must never reach production. */
 const WEAK_SECRETS = new Set([
   "your-secret-here-change-in-production",
@@ -47,8 +53,7 @@ const authSecret = z
   .string()
   .min(32, "BETTER_AUTH_SECRET must be at least 32 characters")
   .refine((value) => !WEAK_SECRETS.has(value.trim().toLowerCase()), {
-    message:
-      "BETTER_AUTH_SECRET is still the example placeholder — generate a real one",
+    message: "BETTER_AUTH_SECRET is still the example placeholder — generate a real one",
   });
 
 const envSchema = z.object({
@@ -67,6 +72,10 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  /** Show and enable the forgot-password flow when SMTP is configured. */
+  FORGOT_PASSWORD_ENABLED: booleanFlag(true),
+  /** Block sign-in until the user clicks the emailed verification link. */
+  REQUIRE_EMAIL_VERIFICATION: booleanFlag(false),
   NODE_ENV: z.enum(["development", "prod"]).default("development"),
   /**
    * Set to the proxy header carrying the real client IP (e.g.

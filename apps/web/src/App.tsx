@@ -8,8 +8,16 @@ import { AdminShell } from "~/components/admin/admin-shell";
 import { RequireAdmin } from "~/components/admin/require-admin";
 import { Spinner } from "~/components/ui/spinner";
 
-const LoginPage = lazy(() =>
-  import("~/pages/login-page").then((m) => ({ default: m.LoginPage })),
+const LoginPage = lazy(() => import("~/pages/login-page").then((m) => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() =>
+  import("~/pages/forgot-password-page").then((m) => ({
+    default: m.ForgotPasswordPage,
+  })),
+);
+const ResetPasswordPage = lazy(() =>
+  import("~/pages/reset-password-page").then((m) => ({
+    default: m.ResetPasswordPage,
+  })),
 );
 const LandingPage = lazy(() =>
   import("~/pages/landing-page").then((m) => ({ default: m.LandingPage })),
@@ -17,9 +25,7 @@ const LandingPage = lazy(() =>
 const PricingPage = lazy(() =>
   import("~/pages/pricing-page").then((m) => ({ default: m.PricingPage })),
 );
-const DocsPage = lazy(() =>
-  import("~/pages/docs-page").then((m) => ({ default: m.DocsPage })),
-);
+const DocsPage = lazy(() => import("~/pages/docs-page").then((m) => ({ default: m.DocsPage })));
 const ExplorePage = lazy(() =>
   import("~/pages/explore-page").then((m) => ({ default: m.ExplorePage })),
 );
@@ -82,6 +88,8 @@ export function App() {
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/f/:slug" element={<PublicFormPage />} />
         <Route path="/form/:slug" element={<PublicFormPage />} />
         <Route element={<DashboardShell />}>
@@ -91,7 +99,13 @@ export function App() {
           <Route path="/analytics/:formId" element={<AnalyticsPage />} />
           <Route path="/payments/:formId" element={<PaymentsPage />} />
         </Route>
-        <Route element={<RequireAdmin><AdminShell /></RequireAdmin>}>
+        <Route
+          element={
+            <RequireAdmin>
+              <AdminShell />
+            </RequireAdmin>
+          }
+        >
           <Route path="/admin" element={<AdminOverviewPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/forms" element={<AdminFormsPage />} />

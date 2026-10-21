@@ -1,13 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ChevronsUpDownIcon,
-  LogOutIcon,
-  PlusIcon,
-  UserIcon,
-} from "lucide-react";
+import { ChevronsUpDownIcon, LogOutIcon, PlusIcon, UserIcon } from "lucide-react";
+import { toast } from "sonner";
 
-import { getAuthEndpoints } from "~/lib/api-origin";
+import { trpc } from "~/trpc/client";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
@@ -31,29 +27,32 @@ interface DashboardHeaderProps {
 }
 
 function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "FF";
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "FF"
+  );
 }
 
 export function DashboardHeader({ user }: DashboardHeaderProps) {
   const navigate = useNavigate();
+  const utils = trpc.useUtils();
+  const signOut = trpc.auth.signOut.useMutation();
   const [signOutPending, setSignOutPending] = useState(false);
 
   const handleSignOut = async () => {
     setSignOutPending(true);
     try {
-      await fetch(getAuthEndpoints().signOut, {
-        method: "POST",
-        credentials: "include",
-      });
+      await signOut.mutateAsync();
+      utils.auth.getSession.setData(undefined, { user: null, session: null });
+      navigate("/login", { replace: true });
     } catch {
-      // continue to redirect even if the request fails
+      toast.error("Couldn't sign out. Please try again.");
+      setSignOutPending(false);
     }
-    navigate("/login", { replace: true });
   };
 
   return (
@@ -69,27 +68,17 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button
-            size="sm"
-            onClick={() => navigate("/builder")}
-          >
+          <Button size="sm" onClick={() => navigate("/builder")}>
             <PlusIcon />
             <span className="hidden sm:inline">New Form</span>
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-8 gap-2 px-2 data-[state=open]:bg-accent"
-              >
+              <Button variant="ghost" className="h-8 gap-2 px-2 data-[state=open]:bg-accent">
                 <Avatar className="size-6 rounded-full">
-                  {user.image ? (
-                    <AvatarImage src={user.image} alt={user.name} />
-                  ) : null}
-                  <AvatarFallback className="text-[10px]">
-                    {initials(user.name)}
-                  </AvatarFallback>
+                  {user.image ? <AvatarImage src={user.image} alt={user.name} /> : null}
+                  <AvatarFallback className="text-[10px]">{initials(user.name)}</AvatarFallback>
                 </Avatar>
                 <span className="hidden max-w-32 truncate text-sm font-medium sm:inline">
                   {user.name}

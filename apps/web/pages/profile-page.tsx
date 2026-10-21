@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Building2Icon,
   BriefcaseIcon,
   CheckIcon,
   CreditCardIcon,
+  LaptopIcon,
+  MailCheckIcon,
+  MailWarningIcon,
   RefreshCwIcon,
   RocketIcon,
+  Trash2Icon,
   UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -40,24 +45,36 @@ const PLAN_DESCRIPTION: Record<string, string> = {
 };
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
   const session = trpc.auth.getSession.useQuery();
+  const config = trpc.auth.getConfig.useQuery();
   const subscription = trpc.subscription.getMySubscription.useQuery();
+
+  const user = session.data?.user;
+
+  const sessions = trpc.auth.listSessions.useQuery(undefined, {
+    enabled: Boolean(user),
+  });
 
   const updateProfile = trpc.subscription.updateProfile.useMutation();
   const createPro = trpc.subscription.createProSubscription.useMutation();
-  const verifyPayment =
-    trpc.subscription.verifySubscriptionPayment.useMutation();
+  const verifyPayment = trpc.subscription.verifySubscriptionPayment.useMutation();
   const cancelSub = trpc.subscription.cancelSubscription.useMutation();
   const syncSub = trpc.subscription.syncSubscription.useMutation();
-
-  const user = session.data?.user;
+  const sendVerification = trpc.auth.sendVerificationEmail.useMutation();
+  const revokeSession = trpc.auth.revokeSession.useMutation();
+  const revokeOthers = trpc.auth.revokeOtherSessions.useMutation();
+  const deleteAccount = trpc.auth.deleteAccount.useMutation();
 
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmRevokeOthers, setConfirmRevokeOthers] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -68,9 +85,7 @@ export function ProfilePage() {
   }, [user]);
 
   const plan = subscription.data?.plan ?? user?.plan ?? "free";
-  const canUpgrade =
-    subscription.data?.razorpayConfigured &&
-    subscription.data?.proPlanConfigured;
+  const canUpgrade = subscription.data?.razorpayConfigured && subscription.data?.proPlanConfigured;
 
   const handleUpgrade = async () => {
     if (!user) return;
@@ -107,9 +122,7 @@ export function ProfilePage() {
       checkout.open();
     } catch (error) {
       setBusy(false);
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't start the upgrade",
-      );
+      toast.error(error instanceof Error ? error.message : "Couldn't start the upgrade");
     }
   };
 
@@ -134,9 +147,7 @@ export function ProfilePage() {
       ]);
       toast.success("Subscription synced with Razorpay");
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't sync subscription",
-      );
+      toast.error(error instanceof Error ? error.message : "Couldn't sync subscription");
     }
   };
 
@@ -152,6 +163,56 @@ export function ProfilePage() {
       await Promise.all([session.refetch(), subscription.refetch()]);
     } catch {
       toast.error("Couldn't save your profile");
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      await sendVerification.mutateAsync();
+      toast.success("Verification email sent. Check your inbox.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't send the verification email");
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      const result = await revokeSession.mutateAsync({ sessionId });
+      if (result.signedOut) {
+        await session.refetch();
+        navigate("/login", { replace: true });
+        return;
+      }
+      toast.success("Session revoked");
+      await sessions.refetch();
+    } catch {
+      toast.error("Couldn't revoke that session");
+    }
+  };
+
+  const handleRevokeOtherSessions = async () => {
+    try {
+      await revokeOthers.mutateAsync();
+      toast.success("Other sessions signed out");
+      setConfirmRevokeOthers(false);
+      await sessions.refetch();
+    } catch {
+      toast.error("Couldn't sign out the other sessions");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount.mutateAsync({
+        password: deletePassword.trim() || undefined,
+      });
+      toast.success("Your account has been deleted");
+      setDeleteOpen(false);
+      setDeletePassword("");
+      await session.refetch();
+      navigate("/", { replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't delete your account");
     }
   };
 
@@ -179,9 +240,7 @@ export function ProfilePage() {
               <UserIcon className="text-muted-foreground size-4" />
               Account details
             </CardTitle>
-            <CardDescription>
-              Your email is used for sign-in and notifications.
-            </CardDescription>
+            <CardDescription>Your email is used for sign-in and notifications.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -197,12 +256,35 @@ export function ProfilePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="profile-email">Email</Label>
-                <Input
-                  id="profile-email"
-                  value={user?.email ?? ""}
-                  disabled
-                  className="h-10"
-                />
+                <Input id="profile-email" value={user?.email ?? ""} disabled className="h-10" />
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
+                  <span className="flex items-center gap-2 text-xs">
+                    {user?.emailVerified ? (
+                      <>
+                        <MailCheckIcon className="size-4 text-emerald-500" />
+                        Email verified
+                      </>
+                    ) : (
+                      <>
+                        <MailWarningIcon className="text-muted-foreground size-4" />
+                        Email not verified
+                      </>
+                    )}
+                  </span>
+                  {!user?.emailVerified && config.data?.emailVerificationEnabled ? (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => void handleResendVerification()}
+                      disabled={sendVerification.isPending}
+                    >
+                      {sendVerification.isPending ? <Spinner /> : null}
+                      Resend verification
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -250,22 +332,14 @@ export function ProfilePage() {
               <CreditCardIcon className="text-muted-foreground size-4" />
               Plan &amp; billing
             </CardTitle>
-            <CardDescription>
-              Your current Formly plan.
-            </CardDescription>
+            <CardDescription>Your current Formly plan.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
-                Current plan
-              </span>
+              <span className="text-sm font-medium">Current plan</span>
               <Badge
                 variant={plan === "pro" ? "default" : "secondary"}
-                className={
-                  plan === "pro"
-                    ? "bg-primary text-primary-foreground"
-                    : undefined
-                }
+                className={plan === "pro" ? "bg-primary text-primary-foreground" : undefined}
               >
                 <RocketIcon className="mr-1 size-3" />
                 {PLAN_LABEL[plan] ?? plan}
@@ -294,8 +368,7 @@ export function ProfilePage() {
             )}
 
             <p className="text-muted-foreground text-sm">
-              {PLAN_DESCRIPTION[plan] ??
-                "Upgrade to unlock more features."}
+              {PLAN_DESCRIPTION[plan] ?? "Upgrade to unlock more features."}
             </p>
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-2">
@@ -353,6 +426,95 @@ export function ProfilePage() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <LaptopIcon className="text-muted-foreground size-4" />
+            Active sessions
+          </CardTitle>
+          <CardDescription>Devices currently signed in to your account.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {sessions.isLoading ? (
+            <div className="flex justify-center py-4">
+              <Spinner className="text-muted-foreground size-5" />
+            </div>
+          ) : sessions.data?.length ? (
+            sessions.data.map((activeSession) => (
+              <div
+                key={activeSession.id}
+                className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    {describeSession(activeSession.userAgent)}
+                    {activeSession.current ? (
+                      <Badge variant="secondary" className="text-[10px]">
+                        This device
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    IP {activeSession.ipAddress ?? "unknown"} &middot; Last active{" "}
+                    {new Date(activeSession.updatedAt).toLocaleString()}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Expires {new Date(activeSession.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+                {!activeSession.current ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleRevokeSession(activeSession.id)}
+                    disabled={revokeSession.isPending}
+                  >
+                    Revoke
+                  </Button>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">No active sessions found.</p>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmRevokeOthers(true)}
+            disabled={
+              revokeOthers.isPending ||
+              !sessions.data ||
+              sessions.data.filter((item) => !item.current).length === 0
+            }
+          >
+            Sign out other sessions
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Trash2Icon className="text-destructive size-4" />
+            Delete account
+          </CardTitle>
+          <CardDescription>
+            Permanently remove your account, forms and responses. An active Pro subscription is
+            cancelled first.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-sm">This action cannot be undone.</p>
+          <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2Icon />
+            Delete account
+          </Button>
+        </CardContent>
+      </Card>
+
       <ConfirmDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
@@ -363,6 +525,73 @@ export function ProfilePage() {
         busy={cancelSub.isPending}
         onConfirm={() => void handleCancel()}
       />
+
+      <ConfirmDialog
+        open={confirmRevokeOthers}
+        onOpenChange={setConfirmRevokeOthers}
+        title="Sign out other sessions?"
+        description="Every other device will need to sign in again. This device stays signed in."
+        confirmLabel="Sign out other sessions"
+        busy={revokeOthers.isPending}
+        onConfirm={() => void handleRevokeOtherSessions()}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open);
+          if (!open) setDeletePassword("");
+        }}
+        title="Delete your account permanently?"
+        description="This removes your forms, responses and billing records. It cannot be undone."
+        confirmLabel="Delete account"
+        destructive
+        busy={deleteAccount.isPending}
+        onConfirm={() => void handleDeleteAccount()}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="delete-password">Password</Label>
+          <Input
+            id="delete-password"
+            type="password"
+            value={deletePassword}
+            onChange={(event) => setDeletePassword(event.target.value)}
+            autoComplete="current-password"
+            placeholder="Required for email/password accounts"
+          />
+          <p className="text-muted-foreground text-xs">
+            Leave blank if you only sign in with Google.
+          </p>
+        </div>
+      </ConfirmDialog>
     </div>
   );
+}
+
+function describeSession(userAgent: string | null): string {
+  if (!userAgent) return "Unknown device";
+
+  const browser = /Edg\//i.test(userAgent)
+    ? "Edge"
+    : /Chrome\//i.test(userAgent)
+      ? "Chrome"
+      : /Firefox\//i.test(userAgent)
+        ? "Firefox"
+        : /Safari\//i.test(userAgent)
+          ? "Safari"
+          : "Browser";
+
+  const os = /Windows/i.test(userAgent)
+    ? "Windows"
+    : /Android/i.test(userAgent)
+      ? "Android"
+      : /iPhone|iPad|iPod/i.test(userAgent)
+        ? "iOS"
+        : /Mac OS X/i.test(userAgent)
+          ? "macOS"
+          : /Linux/i.test(userAgent)
+            ? "Linux"
+            : "Unknown OS";
+
+  return `${browser} on ${os}`;
 }

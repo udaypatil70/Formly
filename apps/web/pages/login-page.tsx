@@ -1,27 +1,26 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardPenIcon, LogInIcon, UserPlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { getAuthEndpoints } from "~/lib/api-origin";
 import { trpc } from "~/trpc/client";
+import { TurnstileWidget } from "~/components/public/turnstile-widget";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 
 type Mode = "sign-in" | "sign-up";
 
+const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const session = trpc.auth.getSession.useQuery();
+  const config = trpc.auth.getConfig.useQuery();
 
   const [mode, setMode] = useState<Mode>("sign-in");
   const [name, setName] = useState("");
@@ -30,6 +29,9 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const handledQuery = useRef(false);
 
   const homeFor = (user?: { role?: "admin" | "user" } | null) =>
     user?.role === "admin" ? "/admin" : "/dashboard";
@@ -39,6 +41,17 @@ export function LoginPage() {
       navigate(homeFor(session.data.user), { replace: true });
     }
   }, [session.data?.user, navigate]);
+
+  useEffect(() => {
+    if (handledQuery.current) return;
+    handledQuery.current = true;
+
+    if (searchParams.get("verified") === "1") {
+      toast.success("Email verified. Welcome to Formly!");
+    } else if (searchParams.get("error")) {
+      setError("This verification link is invalid or has expired.");
+    }
+  }, [searchParams]);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -60,6 +73,10 @@ export function LoginPage() {
       setError("Please enter your name");
       return;
     }
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the verification.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -70,32 +87,67 @@ export function LoginPage() {
       const payload =
         mode === "sign-in"
           ? { email: email.trim(), password }
-          : { name: name.trim(), email: email.trim(), password };
+          : {
+              name: name.trim(),
+              email: email.trim(),
+              password,
+              callbackURL: `${window.location.origin}/login?verified=1`,
+            };
 
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(turnstileToken ? { "x-turnstile-token": turnstileToken } : {}),
+        },
         body: JSON.stringify(payload),
         credentials: "include",
       });
 
-      const body = (await response.json().catch(() => null)) as
-        | { message?: string; error?: { message?: string } }
-        | null;
+      const body = (await response.json().catch(() => null)) as {
+        code?: string;
+        message?: string;
+        error?: { code?: string; message?: string };
+      } | null;
 
       if (!response.ok) {
+        const code = body?.error?.code ?? body?.code;
         const message =
-          body?.error?.message ?? body?.message ?? "Authentication failed";
+          code === "EMAIL_NOT_VERIFIED"
+            ? "Verify your email before signing in. We just sent a fresh link to your inbox."
+            : (body?.error?.message ?? body?.message ?? "Authentication failed");
         setError(message);
+        setTurnstileToken("");
+        setTurnstileResetKey((key) => key + 1);
         setLoading(false);
         return;
       }
 
-      toast.success(mode === "sign-in" ? "Welcome back!" : "Account created");
+      if (mode === "sign-up") {
+        if (config.data?.requireEmailVerification) {
+          toast.success("Account created. Check your inbox to verify your email.");
+          setMode("sign-in");
+          setPassword("");
+          setTurnstileToken("");
+          setTurnstileResetKey((key) => key + 1);
+          setLoading(false);
+          return;
+        }
+        toast.success(
+          config.data?.emailVerificationEnabled
+            ? "Account created. Check your inbox to verify your email."
+            : "Account created",
+        );
+      } else {
+        toast.success("Welcome back!");
+      }
+
       const next = await session.refetch();
       navigate(homeFor(next.data?.user), { replace: true });
     } catch {
       setError("Couldn't reach the API server. Is it running?");
+      setTurnstileToken("");
+      setTurnstileResetKey((key) => key + 1);
       setLoading(false);
     }
   };
@@ -112,17 +164,13 @@ export function LoginPage() {
         </span>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Formly</h1>
-          <p className="text-muted-foreground text-sm">
-            Build forms. Collect answers. Repeat.
-          </p>
+          <p className="text-muted-foreground text-sm">Build forms. Collect answers. Repeat.</p>
         </div>
       </div>
 
       <Card className="border-border/60 w-full max-w-sm bg-card/60 shadow-xl backdrop-blur">
         <CardHeader className="pb-4">
-          <CardTitle>
-            {mode === "sign-in" ? "Sign in" : "Create account"}
-          </CardTitle>
+          <CardTitle>{mode === "sign-in" ? "Sign in" : "Create account"}</CardTitle>
           <CardDescription>
             {mode === "sign-in"
               ? "Enter your details to manage your forms."
@@ -183,7 +231,17 @@ export function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                {mode === "sign-in" && config.data?.forgotPasswordEnabled ? (
+                  <Link
+                    to="/forgot-password"
+                    className="text-primary text-xs font-medium hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                ) : null}
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -196,14 +254,17 @@ export function LoginPage() {
               />
             </div>
 
+            {TURNSTILE_SITE_KEY ? (
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                onToken={setTurnstileToken}
+                onExpire={() => setTurnstileToken("")}
+                resetKey={turnstileResetKey}
+              />
+            ) : null}
+
             <Button type="submit" className="h-10 w-full" disabled={loading}>
-              {loading ? (
-                <Spinner />
-              ) : mode === "sign-in" ? (
-                <LogInIcon />
-              ) : (
-                <UserPlusIcon />
-              )}
+              {loading ? <Spinner /> : mode === "sign-in" ? <LogInIcon /> : <UserPlusIcon />}
               {mode === "sign-in" ? "Sign in" : "Create account"}
             </Button>
           </form>
