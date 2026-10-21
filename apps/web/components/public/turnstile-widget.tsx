@@ -25,20 +25,17 @@ interface TurnstileWidgetProps {
   siteKey: string;
   onToken: (token: string) => void;
   onExpire?: () => void;
+  /** Change this value to clear a consumed token and render a fresh one. */
+  resetKey?: number;
 }
 
-const SCRIPT_SRC =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 /**
  * Cloudflare Turnstile widget loaded lazily from Cloudflare's CDN.
  * Renders nothing when `siteKey` is empty (protection disabled).
  */
-export function TurnstileWidget({
-  siteKey,
-  onToken,
-  onExpire,
-}: TurnstileWidgetProps) {
+export function TurnstileWidget({ siteKey, onToken, onExpire, resetKey }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | undefined>(undefined);
   const tokenRef = useRef(onToken);
@@ -71,9 +68,7 @@ export function TurnstileWidget({
     if (window.turnstile) {
       renderWidget();
     } else {
-      const existing = document.getElementById(
-        "cf-turnstile-script",
-      ) as HTMLScriptElement | null;
+      const existing = document.getElementById("cf-turnstile-script") as HTMLScriptElement | null;
       const script =
         existing ??
         (() => {
@@ -94,6 +89,11 @@ export function TurnstileWidget({
       widgetIdRef.current = undefined;
     };
   }, [siteKey]);
+
+  useEffect(() => {
+    if (resetKey === undefined || widgetIdRef.current === undefined) return;
+    window.turnstile?.reset(widgetIdRef.current);
+  }, [resetKey]);
 
   if (!siteKey) return null;
   return <div ref={containerRef} className="[&>div]:mx-auto" />;

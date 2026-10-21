@@ -7,21 +7,23 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/components/ui/alert-dialog"
-import { Spinner } from "~/components/ui/spinner"
-import { cn } from "~/lib/utils"
+} from "~/components/ui/alert-dialog";
+import { Spinner } from "~/components/ui/spinner";
+import { cn } from "~/lib/utils";
 
 type ConfirmDialogProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  description?: React.ReactNode
-  confirmLabel?: string
-  cancelLabel?: string
-  destructive?: boolean
-  busy?: boolean
-  onConfirm: () => void
-}
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  busy?: boolean;
+  confirmDisabled?: boolean;
+  children?: React.ReactNode;
+  onConfirm: () => void;
+};
 
 function ConfirmDialog({
   open,
@@ -32,6 +34,8 @@ function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive = false,
   busy = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -39,17 +43,16 @@ function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description ? (
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          ) : null}
+          {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             onClick={(event) => {
-              event.preventDefault()
-              onConfirm()
+              event.preventDefault();
+              onConfirm();
             }}
             className={cn(
               destructive &&
@@ -62,7 +65,7 @@ function ConfirmDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }
 
-export { ConfirmDialog }
+export { ConfirmDialog };
