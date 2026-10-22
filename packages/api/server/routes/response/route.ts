@@ -136,7 +136,6 @@ export const responseRouter = router({
       const labelByFieldId = new Map(
         fields.map((f) => [f.id, f.label] as const),
       );
-      const allFieldIds = new Set(fields.map((f) => f.id));
 
       const responseIds = rows.map((r) => r.id);
       const answers =
