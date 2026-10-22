@@ -1,7 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  "globalEnv": ["SKIP_ENV_VALIDATION"],
+  "globalEnv": ["SKIP_ENV_VALIDATION", "TRUST_PROXY"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

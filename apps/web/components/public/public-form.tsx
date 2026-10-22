@@ -883,7 +883,7 @@ export function PublicForm({
               Edit this response
             </Button>
           ) : null}
-          {form.settings?.allowMultipleResponses === true ? (
+          {previewMode || form.settings?.allowMultipleResponses === true ? (
             <Button
               variant="outline"
               onClick={() => {
