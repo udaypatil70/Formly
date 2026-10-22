@@ -28,7 +28,13 @@ export interface BuilderField {
 export interface BuilderFormSettings {
   password?: string;
   expiry?: string | null;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  responseTarget?: number | null;
   responseLimit?: number | null;
+  closeMessage?: string | null;
+  allowMultipleResponses?: boolean;
+  allowResponseEditing?: boolean;
   thankYouMessage?: string;
   stepMode?: "all" | "page" | "question";
   notifyOnResponse?: boolean;

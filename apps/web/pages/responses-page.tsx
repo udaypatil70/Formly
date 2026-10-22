@@ -7,7 +7,9 @@ import {
   ChevronRightIcon,
   DownloadIcon,
   InboxIcon,
+  PencilIcon,
   SearchIcon,
+  StarIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -25,9 +27,12 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Switch } from "~/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { Textarea } from "~/components/ui/textarea";
 
 type AnswerValueObject = {
   fileId?: string;
@@ -42,16 +47,31 @@ type AnswerValueObject = {
   status?: string;
 };
 
+type ResponseAnswer = {
+  fieldId: string;
+  fieldLabel: string;
+  value: string | number | boolean | string[] | AnswerValueObject | null;
+};
+
 type ResponseRow = {
   id: string;
   submittedAt: string;
   completedInSeconds?: number | null;
-  answers: {
-    fieldId: string;
-    fieldLabel: string;
-    value: string | number | boolean | string[] | AnswerValueObject | null;
-  }[];
+  editedAt?: string | null;
+  notes?: string | null;
+  tags?: string[];
+  starred?: boolean;
+  answers: ResponseAnswer[];
 };
+
+type ResponseField = {
+  id: string;
+  type: string;
+  label: string;
+  options?: { value: string; label: string }[];
+};
+
+const IMMUTABLE_TYPES = new Set(["file_upload", "payment", "page_break"]);
 
 export function ResponsesPage() {
   const { formId } = useParams<{ formId: string }>();
@@ -86,6 +106,7 @@ export function ResponsesPage() {
     { enabled: false },
   );
   const deleteMutation = trpc.response.delete.useMutation();
+  const updateMutation = trpc.response.update.useMutation();
 
   const [selected, setSelected] = useState<ResponseRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ResponseRow | null>(null);
@@ -131,6 +152,26 @@ export function ResponsesPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
     }
+  };
+
+  const handleToggleStar = async (response: ResponseRow) => {
+    try {
+      const updated = await updateMutation.mutateAsync({
+        id: response.id,
+        starred: !response.starred,
+      });
+      setSelected((prev) =>
+        prev?.id === response.id ? (updated as ResponseRow) : prev,
+      );
+      await utils.response.list.invalidate();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    }
+  };
+
+  const handleResponseUpdated = (updated: ResponseRow) => {
+    setSelected(updated);
+    void utils.response.list.invalidate();
   };
 
   return (
@@ -255,6 +296,9 @@ export function ResponsesPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead className="w-10">
+                  <span className="sr-only">Starred</span>
+                </TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="hidden sm:table-cell">Time taken</TableHead>
                 <TableHead className="text-right">Answers</TableHead>
@@ -270,6 +314,27 @@ export function ResponsesPage() {
                   className="cursor-pointer"
                   onClick={() => setSelected(response)}
                 >
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={
+                        response.starred ? "Unstar response" : "Star response"
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleToggleStar(response);
+                      }}
+                    >
+                      <StarIcon
+                        className={
+                          response.starred
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-muted-foreground"
+                        }
+                      />
+                    </Button>
+                  </TableCell>
                   <TableCell className="tabular-nums">
                     {formatDateTime(response.submittedAt)}
                   </TableCell>
@@ -347,72 +412,13 @@ export function ResponsesPage() {
             <DialogTitle>Response details</DialogTitle>
           </DialogHeader>
           {selected && (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">
-                  Submitted {formatDateTime(selected.submittedAt)}
-                </span>
-                {selected.completedInSeconds != null && (
-                  <span className="text-muted-foreground">
-                    Took {formatDuration(selected.completedInSeconds)}
-                  </span>
-                )}
-              </div>
-              <Separator />
-              <div className="flex max-h-80 flex-col gap-3 overflow-y-auto">
-                {selected.answers.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    This response has no answers.
-                  </p>
-                ) : (
-                  selected.answers.map((answer) => (
-                    <div key={answer.fieldId}>
-                      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                        {answer.fieldLabel}
-                      </p>
-<p className="mt-0.5 text-sm whitespace-pre-wrap">
-                      {typeof answer.value === "object" &&
-                      answer.value !== null &&
-                      !Array.isArray(answer.value) ? (
-                        safeAnswerUrl(answer.value.url) ? (
-                          <a
-                            href={safeAnswerUrl(answer.value.url)}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="text-primary underline underline-offset-2"
-                          >
-                            {answer.value.name ?? "Download file"}
-                          </a>
-                        ) : "amount" in answer.value &&
-                          typeof answer.value.amount === "number" &&
-                          typeof answer.value.currency === "string" ? (
-                          <span className="inline-flex items-center gap-2">
-                            <span className="font-medium">
-                              Paid {answer.value.currency} {answer.value.amount}
-                            </span>
-                            <span
-                              className={
-                                "rounded-full px-2 py-0.5 text-xs font-medium " +
-                                (answer.value.status === "refunded"
-                                  ? "bg-amber-500/15 text-amber-400"
-                                  : "bg-emerald-500/15 text-emerald-400")
-                              }
-                            >
-                              {answer.value.status ?? "paid"}
-                            </span>
-                          </span>
-                        ) : (
-                          answer.value.name ?? "File"
-                        )
-                      ) : (
-                        formatAnswerValue(answer.value)
-                      )}
-                    </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <ResponseDetail
+              key={selected.id}
+              response={selected}
+              fields={formQuery.data?.fields ?? []}
+              onUpdated={handleResponseUpdated}
+              onDelete={() => setDeleteTarget(selected)}
+            />
           )}
         </DialogContent>
       </Dialog>
@@ -429,6 +435,421 @@ export function ResponsesPage() {
       />
     </div>
   );
+}
+
+function ResponseDetail({
+  response,
+  fields,
+  onUpdated,
+  onDelete,
+}: {
+  response: ResponseRow;
+  fields: ResponseField[];
+  onUpdated: (response: ResponseRow) => void;
+  onDelete: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const update = trpc.response.update.useMutation();
+  const [notes, setNotes] = useState(response.notes ?? "");
+  const [tagsText, setTagsText] = useState((response.tags ?? []).join(", "));
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<unknown>("");
+
+  const fieldById = new Map(fields.map((field) => [field.id, field]));
+
+  const invalidate = () => {
+    void utils.response.list.invalidate();
+  };
+
+  const saveMetadata = async () => {
+    try {
+      const tags = [
+        ...new Set(
+          tagsText
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        ),
+      ];
+      const updated = await update.mutateAsync({
+        id: response.id,
+        notes: notes.trim() ? notes : null,
+        tags,
+        starred: response.starred ?? false,
+      });
+      onUpdated(updated as ResponseRow);
+      invalidate();
+      toast.success("Response details saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    }
+  };
+
+  const toggleStar = async () => {
+    try {
+      const updated = await update.mutateAsync({
+        id: response.id,
+        starred: !(response.starred ?? false),
+      });
+      onUpdated(updated as ResponseRow);
+      invalidate();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    }
+  };
+
+  const startEditing = (answer: ResponseAnswer) => {
+    setEditingFieldId(answer.fieldId);
+    setDraft(
+      Array.isArray(answer.value) ? [...answer.value] : (answer.value ?? ""),
+    );
+  };
+
+  const saveAnswer = async (field: ResponseField) => {
+    try {
+      const value = coerceAnswerValue(field, draft);
+      const updated = await update.mutateAsync({
+        id: response.id,
+        answers: { [field.id]: value },
+      });
+      onUpdated(updated as ResponseRow);
+      invalidate();
+      setEditingFieldId(null);
+      toast.success("Answer updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="text-muted-foreground">
+            Submitted {formatDateTime(response.submittedAt)}
+          </span>
+          {response.completedInSeconds != null && (
+            <span className="text-muted-foreground">
+              Took {formatDuration(response.completedInSeconds)}
+            </span>
+          )}
+          {response.editedAt ? (
+            <span className="text-muted-foreground">
+              Edited {formatDateTime(response.editedAt)}
+            </span>
+          ) : null}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void toggleStar()}
+          disabled={update.isPending}
+        >
+          <StarIcon
+            className={
+              response.starred
+                ? "fill-amber-400 text-amber-400"
+                : "text-muted-foreground"
+            }
+          />
+          {response.starred ? "Starred" : "Star"}
+        </Button>
+      </div>
+
+      <Separator />
+
+      <div className="flex max-h-80 flex-col gap-4 overflow-y-auto pr-1">
+        {response.answers.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            This response has no answers.
+          </p>
+        ) : (
+          response.answers.map((answer) => {
+            const field = fieldById.get(answer.fieldId);
+            const canEdit = Boolean(field && !IMMUTABLE_TYPES.has(field.type));
+            const editing = editingFieldId === answer.fieldId && field;
+            return (
+              <div key={answer.fieldId} className="flex flex-col gap-1">
+                <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                  {answer.fieldLabel}
+                </p>
+                {editing ? (
+                  <div className="flex flex-col gap-2">
+                    <AnswerEditor
+                      field={field}
+                      value={draft}
+                      onChange={setDraft}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingFieldId(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={update.isPending}
+                        onClick={() => void saveAnswer(field)}
+                      >
+                        Save answer
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 text-sm whitespace-pre-wrap">
+                      <AnswerValueDisplay value={answer.value} />
+                    </div>
+                    {canEdit ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Edit ${answer.fieldLabel}`}
+                        onClick={() => startEditing(answer)}
+                      >
+                        <PencilIcon />
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="response-notes">Private notes</Label>
+          <Textarea
+            id="response-notes"
+            rows={3}
+            maxLength={10_000}
+            value={notes}
+            placeholder="Notes only your team can see"
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="response-tags">Tags</Label>
+          <Input
+            id="response-tags"
+            value={tagsText}
+            placeholder="vip, follow-up, beta"
+            onChange={(e) => setTagsText(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Separate tags with commas.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2Icon />
+            Delete response
+          </Button>
+          <Button
+            size="sm"
+            disabled={update.isPending}
+            onClick={() => void saveMetadata()}
+          >
+            Save details
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnswerValueDisplay({ value }: { value: ResponseAnswer["value"] }) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  ) {
+    if (safeAnswerUrl(value.url)) {
+      return (
+        <a
+          href={safeAnswerUrl(value.url)}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-primary underline underline-offset-2"
+        >
+          {value.name ?? "Download file"}
+        </a>
+      );
+    }
+    if (
+      "amount" in value &&
+      typeof value.amount === "number" &&
+      typeof value.currency === "string"
+    ) {
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span className="font-medium">
+            Paid {value.currency} {value.amount}
+          </span>
+          <span
+            className={
+              "rounded-full px-2 py-0.5 text-xs font-medium " +
+              (value.status === "refunded"
+                ? "bg-amber-500/15 text-amber-400"
+                : "bg-emerald-500/15 text-emerald-400")
+            }
+          >
+            {value.status ?? "paid"}
+          </span>
+        </span>
+      );
+    }
+    return <>{value.name ?? "File"}</>;
+  }
+  return <>{formatAnswerValue(value)}</>;
+}
+
+function AnswerEditor({
+  field,
+  value,
+  onChange,
+}: {
+  field: ResponseField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  if (field.type === "long_text") {
+    return (
+      <Textarea
+        rows={3}
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  if (
+    (field.type === "single_select" || field.type === "radio") &&
+    field.options &&
+    field.options.length > 0
+  ) {
+    return (
+      <select
+        className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
+        <option value="">Select an option</option>
+        {field.options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (
+    (field.type === "multi_select" || field.type === "checkbox") &&
+    field.options &&
+    field.options.length > 0
+  ) {
+    const selected = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <div className="flex flex-col gap-2 rounded-md border p-3">
+        {field.options.map((option) => {
+          const checked = selected.includes(option.value);
+          return (
+            <label
+              key={option.value}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              {option.label}
+              <Switch
+                checked={checked}
+                onCheckedChange={(next) =>
+                  onChange(
+                    next
+                      ? [...selected, option.value]
+                      : selected.filter((item) => item !== option.value),
+                  )
+                }
+              />
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (field.type === "checkbox") {
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <Switch
+          checked={value === true}
+          onCheckedChange={(checked) => onChange(checked)}
+        />
+        <span>{value === true ? "Checked" : "Unchecked"}</span>
+      </div>
+    );
+  }
+
+  const inputType =
+    field.type === "number" ||
+    field.type === "rating" ||
+    field.type === "scale"
+      ? "number"
+      : field.type === "date"
+        ? "date"
+        : field.type === "time"
+          ? "time"
+          : field.type === "email"
+            ? "email"
+            : field.type === "url"
+              ? "url"
+              : field.type === "phone"
+                ? "tel"
+                : "text";
+
+  const rawValue =
+    typeof value === "string" || typeof value === "number" ? value : "";
+  const inputValue =
+    field.type === "date"
+      ? String(rawValue).slice(0, 10)
+      : field.type === "time"
+        ? String(rawValue).slice(0, 5)
+        : rawValue;
+
+  return (
+    <Input
+      type={inputType}
+      value={inputValue}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+function coerceAnswerValue(field: ResponseField, value: unknown): unknown {
+  if (
+    field.type === "number" ||
+    field.type === "rating" ||
+    field.type === "scale"
+  ) {
+    if (value === "" || value == null) return null;
+    return Number(value);
+  }
+  if (field.type === "checkbox") return value === true;
+  if (field.type === "multi_select") {
+    return Array.isArray(value) ? value : [];
+  }
+  if (value === "") return null;
+  return value;
 }
 
 /**

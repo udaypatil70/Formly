@@ -47,6 +47,22 @@ const slugify = (value: string) =>
     .replace(/-{2,}/g, "-")
     .slice(0, 255);
 
+function toDateTimeLocal(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+  const local = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
+  return local.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 const FIELD_TYPES: FieldType[] = [
   "short_text",
   "long_text",
@@ -1702,47 +1718,131 @@ function FormSettings({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="form-response-limit">Response limit</Label>
-        <Input
-          id="form-response-limit"
-          type="number"
-          min={1}
-          placeholder="No limit"
-          value={settings.responseLimit ?? ""}
-          onChange={(e) =>
-            onSettingsChange({
-              responseLimit:
-                e.target.value === "" ? null : Number(e.target.value),
-            })
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          Stop accepting responses after this many submissions.
-        </p>
-      </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="form-opens-at">Opens at</Label>
+          <Input
+            id="form-opens-at"
+            type="datetime-local"
+            value={toDateTimeLocal(settings.opensAt)}
+            onChange={(e) =>
+              onSettingsChange({
+                opensAt: fromDateTimeLocal(e.target.value),
+              })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Responses are not accepted before this time.
+          </p>
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="form-expiry">Expiry date</Label>
-        <Input
-          id="form-expiry"
-          type="date"
-          value={
-            settings.expiry ? settings.expiry.slice(0, 10) : ""
-          }
-          min={new Date().toISOString().slice(0, 10)}
-          onChange={(e) =>
-            onSettingsChange({
-              expiry: e.target.value
-                ? new Date(`${e.target.value}T00:00:00`).toISOString()
-                : null,
-            })
-          }
-        />
-        <p className="text-xs text-muted-foreground">
-          The form stops accepting responses after this date.
-        </p>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="form-closes-at">Closes at</Label>
+          <Input
+            id="form-closes-at"
+            type="datetime-local"
+            value={toDateTimeLocal(settings.closesAt ?? settings.expiry)}
+            min={toDateTimeLocal(settings.opensAt) || undefined}
+            onChange={(e) =>
+              onSettingsChange({
+                closesAt: fromDateTimeLocal(e.target.value),
+                expiry: null,
+              })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Responses are not accepted after this time.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="form-response-target">Response target</Label>
+            <Input
+              id="form-response-target"
+              type="number"
+              min={1}
+              placeholder="None"
+              value={settings.responseTarget ?? ""}
+              onChange={(e) =>
+                onSettingsChange({
+                  responseTarget:
+                    e.target.value === "" ? null : Number(e.target.value),
+                })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Stops accepting responses at this count.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="form-response-limit">Hard limit</Label>
+            <Input
+              id="form-response-limit"
+              type="number"
+              min={1}
+              placeholder="None"
+              value={settings.responseLimit ?? ""}
+              onChange={(e) =>
+                onSettingsChange({
+                  responseLimit:
+                    e.target.value === "" ? null : Number(e.target.value),
+                })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Absolute maximum number of responses.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="form-close-message">Closed message</Label>
+          <Textarea
+            id="form-close-message"
+            rows={3}
+            value={settings.closeMessage ?? ""}
+            placeholder="Shown when the form is closed, full, or not open yet"
+            onChange={(e) =>
+              onSettingsChange({ closeMessage: e.target.value })
+            }
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="form-multiple-responses">
+              Allow multiple responses
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Let the same visitor submit more than once.
+            </p>
+          </div>
+          <Switch
+            id="form-multiple-responses"
+            checked={settings.allowMultipleResponses === true}
+            onCheckedChange={(checked) =>
+              onSettingsChange({ allowMultipleResponses: checked })
+            }
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="form-response-editing">
+              Allow response editing
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Respondents can reopen their submission with an edit link.
+            </p>
+          </div>
+          <Switch
+            id="form-response-editing"
+            checked={settings.allowResponseEditing !== false}
+            onCheckedChange={(checked) =>
+              onSettingsChange({ allowResponseEditing: checked })
+            }
+          />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

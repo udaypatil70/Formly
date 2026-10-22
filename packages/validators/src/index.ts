@@ -86,6 +86,71 @@ export const ConditionalLogicSchema = z
   .optional();
 export type ConditionalLogic = z.infer<typeof ConditionalLogicSchema>;
 
+/**
+ * Evaluates one visibility rule against the answers collected so far.
+ * Shared by the renderer and the submission endpoint so a crafted request
+ * cannot use a different interpretation than the browser.
+ */
+export function evaluateConditionalRule(
+  rule: ConditionalRule,
+  answers: Record<string, unknown>,
+): boolean {
+  const sourceValue = answers[rule.fieldId];
+  switch (rule.operator) {
+    case "equals":
+      return sourceValue === rule.value;
+    case "not_equals":
+      return sourceValue !== rule.value;
+    case "contains":
+      return Array.isArray(sourceValue)
+        ? sourceValue.includes(rule.value as string)
+        : String(sourceValue ?? "").includes(String(rule.value));
+    case "greater_than":
+      return Number(sourceValue) > Number(rule.value);
+    case "less_than":
+      return Number(sourceValue) < Number(rule.value);
+    default:
+      return true;
+  }
+}
+
+/**
+ * Whether `conditionalLogic` leaves a field visible for the given answers.
+ * Mirrors the client's rendering rules exactly:
+ * - `showIf` must pass (when present)
+ * - when `groups` are configured, at least one group must match
+ * - when neither is configured the field is always visible
+ */
+export function isFieldVisible(
+  logic: ConditionalLogic | null | undefined,
+  answers: Record<string, unknown>,
+): boolean {
+  if (!logic) return true;
+
+  if (logic.showIf && !evaluateConditionalRule(logic.showIf, answers)) {
+    return false;
+  }
+
+  const groups = logic.groups ?? [];
+  if (groups.length === 0) return true;
+
+  return groups.some((group) => {
+    if (group.conditions.length === 0) return false;
+    const results = group.conditions.map((condition) =>
+      evaluateConditionalRule(condition, answers),
+    );
+    return group.all ? results.every(Boolean) : results.some(Boolean);
+  });
+}
+
+/** Returns only the fields that are visible for `answers`. */
+export function visibleFields<T extends { conditionalLogic?: ConditionalLogic | null }>(
+  fields: T[],
+  answers: Record<string, unknown>,
+): T[] {
+  return fields.filter((field) => isFieldVisible(field.conditionalLogic, answers));
+}
+
 // ─── Template Categories ────────────────────────────────
 // Single source of truth shared by the DB enum (`template_category`), the
 // template API filters and the frontend category picker.
@@ -183,8 +248,14 @@ export const FormSchema = z.object({
   settings: z
     .object({
       password: z.string().optional(),
-      expiry: z.string().optional(),
-      responseLimit: z.number().int().positive().optional(),
+      expiry: z.string().nullish(),
+      opensAt: z.string().nullish(),
+      closesAt: z.string().nullish(),
+      responseTarget: z.number().int().positive().nullish(),
+      responseLimit: z.number().int().positive().nullish(),
+      closeMessage: z.string().max(2000).nullish(),
+      allowMultipleResponses: z.boolean().optional(),
+      allowResponseEditing: z.boolean().optional(),
       stepMode: z.enum(["all", "page", "question"]).optional(),
       notifyOnResponse: z.boolean().optional(),
       notificationEmail: z.string().optional(),
@@ -264,8 +335,14 @@ export const CreateFormInput = z.object({
   settings: z
     .object({
       password: z.string().min(1).optional(),
-      expiry: z.string().optional(),
-      responseLimit: z.number().int().positive().optional(),
+      expiry: z.string().nullish(),
+      opensAt: z.string().nullish(),
+      closesAt: z.string().nullish(),
+      responseTarget: z.number().int().positive().nullish(),
+      responseLimit: z.number().int().positive().nullish(),
+      closeMessage: z.string().max(2000).nullish(),
+      allowMultipleResponses: z.boolean().optional(),
+      allowResponseEditing: z.boolean().optional(),
       thankYouMessage: z.string().max(2000).optional(),
       stepMode: z.enum(["all", "page", "question"]).optional(),
       notifyOnResponse: z.boolean().optional(),

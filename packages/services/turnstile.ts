@@ -3,13 +3,24 @@ const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/sit
 /**
  * Verifies a Cloudflare Turnstile token server-side.
  *
- * When `TURNSTILE_SECRET_KEY` is not configured the check is skipped and the
- * request is allowed (feature disabled). When it is configured, a missing or
- * invalid token fails verification.
+ * A missing secret no longer silently disables the check in production: that
+ * turned misconfiguration into an open submission endpoint. Set
+ * `TURNSTILE_DISABLED=true` to opt out explicitly (local development still
+ * runs without a secret). When configured, a missing/invalid token fails.
  */
 export async function verifyTurnstileToken(token?: string, ip?: string): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) return true;
+  if (!secret) {
+    const explicitlyDisabled = process.env.TURNSTILE_DISABLED === "true";
+    const development = process.env.NODE_ENV !== "production";
+    if (!explicitlyDisabled && !development) {
+      console.error(
+        "Turnstile is not configured. Set TURNSTILE_SECRET_KEY or TURNSTILE_DISABLED=true.",
+      );
+      return false;
+    }
+    return true;
+  }
 
   if (!token) return false;
 
