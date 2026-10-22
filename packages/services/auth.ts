@@ -1,10 +1,21 @@
-import { betterAuth } from "better-auth";
+import {
+  betterAuth,
+  type Auth,
+  type BetterAuthOptions,
+} from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { toNodeHandler } from "better-auth/node";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { sso } from "@better-auth/sso";
 import { createHash, randomUUID } from "node:crypto";
-import { db } from "@repo/db";
-import { usersTable, sessionsTable, accountsTable, verificationsTable } from "@repo/db/schema";
+import { db, eq, or } from "@repo/db";
+import {
+  usersTable,
+  sessionsTable,
+  accountsTable,
+  verificationsTable,
+  ssoProviderTable,
+} from "@repo/db/schema";
 import { env } from "./env";
 import { isEmailConfigured, sendEmailVerificationEmail, sendPasswordResetEmail } from "./email";
 import { rateLimit } from "./rate-limit";
@@ -62,7 +73,58 @@ async function enforceAuthRateLimit(action: "signin" | "signup", email: string, 
   }
 }
 
+async function getSsoProviderLimit(user: { id: string }): Promise<number> {
+  const [account] = await db
+    .select({ plan: usersTable.plan })
+    .from(usersTable)
+    .where(eq(usersTable.id, user.id))
+    .limit(1)
+    .execute();
+  return account?.plan === "enterprise" ? 1 : 0;
+}
+
 const authGuard = createAuthMiddleware(async (ctx) => {
+  if (ctx.path === "/sign-in/sso") {
+    const email =
+      typeof ctx.body?.email === "string"
+        ? ctx.body.email.trim().toLowerCase()
+        : "";
+    const emailDomain =
+      email.includes("@") ? email.slice(email.lastIndexOf("@") + 1) : "";
+    const requestedDomain =
+      typeof ctx.body?.domain === "string"
+        ? ctx.body.domain.trim().toLowerCase()
+        : "";
+    const providerId =
+      typeof ctx.body?.providerId === "string" ? ctx.body.providerId : "";
+    const conditions = [
+      ...(emailDomain ? [eq(ssoProviderTable.domain, emailDomain)] : []),
+      ...(requestedDomain
+        ? [eq(ssoProviderTable.domain, requestedDomain)]
+        : []),
+      ...(providerId ? [eq(ssoProviderTable.providerId, providerId)] : []),
+    ];
+    if (conditions.length === 0) return;
+
+    const providers = await db
+      .select({ plan: usersTable.plan, domainVerified: ssoProviderTable.domainVerified })
+      .from(ssoProviderTable)
+      .innerJoin(usersTable, eq(usersTable.id, ssoProviderTable.userId))
+      .where(or(...conditions))
+      .execute();
+    if (
+      providers.some(
+        (provider) =>
+          provider.plan !== "enterprise" || !provider.domainVerified,
+      )
+    ) {
+      throw new APIError("FORBIDDEN", {
+        message: "SAML sign-in is unavailable for this provider",
+      });
+    }
+    return;
+  }
+
   if (ctx.path !== "/sign-in/email" && ctx.path !== "/sign-up/email") {
     return;
   }
@@ -86,7 +148,7 @@ const authGuard = createAuthMiddleware(async (ctx) => {
   }
 });
 
-export const auth = betterAuth({
+const authConfig = {
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
@@ -94,6 +156,7 @@ export const auth = betterAuth({
       session: sessionsTable,
       account: accountsTable,
       verification: verificationsTable,
+      ssoProvider: ssoProviderTable,
     },
   }),
   secret: env.BETTER_AUTH_SECRET,
@@ -159,6 +222,18 @@ export const auth = betterAuth({
   hooks: {
     before: authGuard,
   },
+  plugins: [
+    sso({
+      domainVerification: { enabled: true },
+      disableImplicitSignUp: true,
+      organizationProvisioning: { disabled: true },
+      providersLimit: getSsoProviderLimit,
+      saml: {
+        requireTimestamps: true,
+        algorithms: { onDeprecated: "reject" },
+      },
+    }),
+  ],
   user: {
     deleteUser: {
       enabled: true,
@@ -216,7 +291,9 @@ export const auth = betterAuth({
       generateId: () => randomUUID(),
     },
   },
-});
+} satisfies BetterAuthOptions;
+
+export const auth: Auth<typeof authConfig> = betterAuth(authConfig);
 
 export const authHandler = toNodeHandler(auth);
 

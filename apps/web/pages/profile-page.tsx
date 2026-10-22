@@ -31,6 +31,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 import { loadRazorpayCheckout } from "~/lib/razorpay";
+import { EnterpriseSecurityCard } from "~/components/auth/enterprise-security-card";
 
 const PLAN_LABEL: Record<string, string> = {
   free: "Free",
@@ -425,6 +426,8 @@ export function ProfilePage() {
           </CardFooter>
         </Card>
       </div>
+
+      {plan === "enterprise" ? <EnterpriseSecurityCard /> : null}
 
       <Card>
         <CardHeader>

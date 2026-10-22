@@ -28,6 +28,7 @@ import { cn } from "~/lib/utils";
 import { billingCaption, usePlanCatalogue, type Billing } from "~/lib/plans";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
+import { trpc } from "~/trpc/client";
 
 function useScrollToHash() {
   const { hash } = useLocation();
@@ -179,6 +180,10 @@ export function LandingPage() {
   useScrollToHash();
   const [billing, setBilling] = useState<Billing>("yearly");
   const { plans } = usePlanCatalogue(billing);
+  const themeCatalogue = trpc.theme.getMarketplace.useQuery({
+    page: 1,
+    pageSize: 1,
+  });
 
   return (
     <div className="min-h-svh bg-background">
@@ -451,10 +456,16 @@ export function LandingPage() {
       <section className="border-y border-border/60 bg-white/[0.02]">
         <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-4 py-10 text-center sm:px-6 lg:grid-cols-4 lg:px-8">
           {[
-            { value: "10k+", label: "Responses collected" },
-            { value: "50+", label: "Curated themes" },
-            { value: "99.9%", label: "Uptime" },
-            { value: "4.9/5", label: "Creator rating" },
+            {
+              value:
+                themeCatalogue.data === undefined
+                  ? "—"
+                  : String(themeCatalogue.data.total),
+              label: "Curated and community themes",
+            },
+            { value: "SAML", label: "Enterprise sign-in" },
+            { value: "90 days", label: "Audit log retention" },
+            { value: "Live", label: "Analytics updates" },
           ].map((stat) => (
             <div key={stat.label}>
               <div className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-3xl font-semibold text-transparent sm:text-4xl">

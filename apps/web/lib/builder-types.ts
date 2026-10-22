@@ -72,6 +72,7 @@ export interface BuilderTheme {
   name?: string;
   category?: string;
   ownerId?: string | null;
+  isPublic?: boolean;
   font?: string | null;
   colors: ThemeColorSet;
   background?: BuilderThemeBackground | null;

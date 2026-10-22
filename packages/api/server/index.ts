@@ -15,6 +15,7 @@ import { paymentRouter } from "./routes/payment/route";
 import { subscriptionRouter } from "./routes/subscription/route";
 import { planRouter } from "./routes/plan/route";
 import { usageRouter } from "./routes/usage/route";
+import { auditRouter } from "./routes/audit/route";
 
 export const serverRouter = router({
   health: healthRouter,
@@ -32,6 +33,7 @@ export const serverRouter = router({
   subscription: subscriptionRouter,
   plan: planRouter,
   usage: usageRouter,
+  audit: auditRouter,
 });
 
 export { createContext } from "./context";

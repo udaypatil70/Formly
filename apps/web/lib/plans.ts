@@ -45,8 +45,7 @@ const COMPARISON_ROWS: { label: string; key: string }[] = [
   { label: "Embed anywhere", key: "embed" },
   { label: "Custom domain", key: "customDomain" },
   { label: "SSO / SAML", key: "ssoSaml" },
-  { label: "Priority support", key: "prioritySupport" },
-  { label: "Uptime SLA + audit logs", key: "auditLogsAndSla" },
+  { label: "90-day audit log retention", key: "auditLogsAndSla" },
 ];
 
 export type PlanView = {

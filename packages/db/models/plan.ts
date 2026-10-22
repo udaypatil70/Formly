@@ -47,7 +47,7 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   payments: "Payment fields",
   ssoSaml: "SSO / SAML",
   prioritySupport: "Priority support",
-  auditLogsAndSla: "Audit logs and uptime SLA",
+  auditLogsAndSla: "Audit logs with 90-day retention",
 };
 
 /**

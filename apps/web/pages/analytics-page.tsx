@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -49,6 +49,7 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
+import { getApiOrigin } from "~/lib/api-origin";
 
 type TrendPoint = { date: string; views: number; responses: number };
 type PieDatum = { name: string; value: number; pct: number; color: string };
@@ -93,7 +94,7 @@ export function AnalyticsPage() {
   );
   const statsQuery = trpc.analytics.getStats.useQuery(
     { formId: formId ?? "" },
-    { enabled: !!formId, refetchInterval: 5_000 },
+    { enabled: !!formId, refetchInterval: 60_000 },
   );
   const dropOffQuery = trpc.analytics.getDropOff.useQuery(
     { formId: formId ?? "" },
@@ -109,6 +110,19 @@ export function AnalyticsPage() {
   );
 
   const stats = statsQuery.data;
+  const refetchStats = statsQuery.refetch;
+
+  useEffect(() => {
+    if (!formId) return;
+    const stream = new EventSource(
+      `${getApiOrigin()}/api/analytics/${encodeURIComponent(formId)}/events`,
+      { withCredentials: true },
+    );
+    stream.onmessage = () => {
+      void refetchStats();
+    };
+    return () => stream.close();
+  }, [formId, refetchStats]);
 
   const trend = useMemo<TrendPoint[]>(() => {
     const byDate = new Map<string, TrendPoint>();

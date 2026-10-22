@@ -65,6 +65,18 @@ const envSchema = z.object({
     .positive()
     .default(30)
     .describe("How long settled webhook deliveries are kept"),
+  DATA_RETENTION_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(86_400_000)
+    .describe("How often expired form drafts and old audit records are purged; 0 disables the worker"),
+  AUDIT_LOG_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(90)
+    .describe("How long enterprise audit records are retained"),
   DOMAIN_VERIFICATION_TXT_PREFIX: z
     .string()
     .default("_formly")
