@@ -1,10 +1,13 @@
+import { createHmac } from "node:crypto";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { OpenApiMeta } from "trpc-to-openapi";
-import { PLAN_FEATURE_LABELS, type PlanFeature } from "@repo/db/schema";
+import { auditLogsTable, PLAN_FEATURE_LABELS, type PlanFeature } from "@repo/db/schema";
+import { db } from "@repo/db";
 
 import { createContext } from "./context";
 import { isAdminUser } from "./utils/admin";
 import { getUserEntitlements, planAllowsFeature } from "./utils/plans";
+import { env } from "@repo/services/env";
 
 export const tRPCContext = initTRPC
   .meta<OpenApiMeta>()
@@ -14,6 +17,45 @@ export const tRPCContext = initTRPC
 export const router = tRPCContext.router;
 
 export const publicProcedure = tRPCContext.procedure;
+
+const auditMutation = tRPCContext.middleware(
+  async ({ ctx, input, next, path, type }) => {
+    const result = await next();
+    if (type !== "mutation" || !ctx.user || ctx.user.plan !== "enterprise") {
+      return result;
+    }
+
+    const inputRecord =
+      input && typeof input === "object" && !Array.isArray(input)
+        ? (input as Record<string, unknown>)
+        : {};
+    const resourceId = ["id", "formId", "responseId"].reduce<string | null>(
+      (found, key) =>
+        found ??
+        (typeof inputRecord[key] === "string" ? inputRecord[key] : null),
+      null,
+    );
+    const ip = ctx.ip;
+    const ipHash = ip
+      ? createHmac("sha256", env.BETTER_AUTH_SECRET).update(ip).digest("hex")
+      : null;
+
+    await db
+      .insert(auditLogsTable)
+      .values({
+        ownerId: ctx.user.id,
+        actorId: ctx.user.id,
+        action: path,
+        resourceType: path.split(".")[0] ?? "unknown",
+        resourceId,
+        metadata: { inputKeys: Object.keys(inputRecord) },
+        ipHash,
+        userAgent: ctx.headers.get("user-agent"),
+      })
+      .execute();
+    return result;
+  },
+);
 
 const enforceAuth = tRPCContext.middleware(({ ctx, next }) => {
   if (!ctx.user) {
@@ -31,7 +73,9 @@ const enforceAuth = tRPCContext.middleware(({ ctx, next }) => {
   });
 });
 
-export const protectedProcedure = tRPCContext.procedure.use(enforceAuth);
+export const protectedProcedure = tRPCContext.procedure
+  .use(enforceAuth)
+  .use(auditMutation);
 
 /**
  * Rejects the request unless the caller's plan grants `feature`.

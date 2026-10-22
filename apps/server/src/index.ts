@@ -3,6 +3,8 @@ import { logger } from "@repo/logger";
 import { app as expressApplication } from "./server";
 import { startUploadSweeper } from "./upload-sweeper";
 import { startWebhookWorker } from "./webhook-worker";
+import { startDataRetentionSweeper } from "./data-retention-sweeper";
+import { startAnalyticsNotificationListener } from "./analytics-events";
 
 import { env } from "./env";
 
@@ -10,6 +12,7 @@ async function init() {
   try {
     const server = http.createServer(expressApplication);
     const PORT: number = env.PORT ? +env.PORT : 8000;
+    await startAnalyticsNotificationListener();
     server.listen(PORT, () => {
       logger.info(`http server is running on PORT ${PORT}`);
     });
@@ -37,6 +40,17 @@ async function init() {
       logger.info("webhook worker started", {
         intervalMs: env.WEBHOOK_WORKER_INTERVAL_MS,
         retentionDays: env.WEBHOOK_RETENTION_DAYS,
+      });
+    }
+
+    if (env.DATA_RETENTION_INTERVAL_MS > 0) {
+      startDataRetentionSweeper({
+        intervalMs: env.DATA_RETENTION_INTERVAL_MS,
+        auditRetentionDays: env.AUDIT_LOG_RETENTION_DAYS,
+      });
+      logger.info("data retention sweeper started", {
+        intervalMs: env.DATA_RETENTION_INTERVAL_MS,
+        auditRetentionDays: env.AUDIT_LOG_RETENTION_DAYS,
       });
     }
   } catch (err) {

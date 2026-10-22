@@ -13,6 +13,7 @@ import { env } from "./env";
 import { uploadsRouter } from "./uploads";
 import { paymentsRouter } from "./payments";
 import { securityHeaders, enforceTrustedOrigin } from "./security";
+import { analyticsEventsRouter } from "./analytics-events-route";
 
 export const app = express();
 
@@ -91,6 +92,8 @@ app.use(
   "/api/payments",
   paymentsRouter(),
 );
+
+app.use(analyticsEventsRouter());
 
 app.use(
   "/api",

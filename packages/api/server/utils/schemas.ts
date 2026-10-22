@@ -21,6 +21,7 @@ export const themeBackgroundOutput = z.discriminatedUnion("type", [
 export const themeOutput = z.object({
   id: z.string().uuid(),
   ownerId: z.string().uuid().nullable().optional(),
+  isPublic: z.boolean(),
   name: z.string(),
   category: z.enum(themeCategories),
   font: z.string().nullable().optional(),

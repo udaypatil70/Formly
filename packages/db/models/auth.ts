@@ -3,6 +3,8 @@ import {
   text,
   uuid,
   timestamp,
+  boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./user";
 
@@ -54,6 +56,29 @@ export const verificationsTable = pgTable("verifications", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const ssoProviderTable = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    organizationId: text("organization_id"),
+    domain: text("domain").notNull(),
+    domainVerified: boolean("domain_verified").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("sso_provider_provider_id_unique").on(table.providerId),
+    uniqueIndex("sso_provider_domain_unique").on(table.domain),
+  ],
+);
 
 export type SelectSession = typeof sessionsTable.$inferSelect;
 export type InsertSession = typeof sessionsTable.$inferInsert;

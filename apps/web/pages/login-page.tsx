@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ClipboardPenIcon, LogInIcon, UserPlusIcon } from "lucide-react";
+import { ClipboardPenIcon, LogInIcon, UserPlusIcon, ShieldCheckIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { getAuthEndpoints } from "~/lib/api-origin";
@@ -29,6 +29,7 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const handledQuery = useRef(false);
@@ -61,6 +62,41 @@ export function LoginPage() {
   const handleGoogleSignIn = () => {
     setGoogleLoading(true);
     window.location.href = getAuthEndpoints().social("google");
+  };
+
+  const handleSsoSignIn = async () => {
+    if (!email.trim()) {
+      setError("Enter your organization email to continue with SAML SSO.");
+      return;
+    }
+    setSsoLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${getAuthEndpoints().origin}/auth/sign-in/sso`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email.trim(),
+          providerType: "saml",
+          callbackURL: `${window.location.origin}/login?sso=1`,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        url?: string;
+        message?: string;
+        error?: { message?: string };
+      } | null;
+      if (!response.ok || !body?.url) {
+        setError(body?.error?.message ?? body?.message ?? "SAML sign-in is not configured for this email domain.");
+        setSsoLoading(false);
+        return;
+      }
+      window.location.assign(body.url);
+    } catch {
+      setError("Couldn't reach the API server. Is it running?");
+      setSsoLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -187,6 +223,18 @@ export function LoginPage() {
             {googleLoading ? <Spinner /> : <GoogleIcon />}
             Continue with Google
           </button>
+
+          {mode === "sign-in" ? (
+            <button
+              type="button"
+              onClick={() => void handleSsoSignIn()}
+              disabled={ssoLoading || googleLoading || loading}
+              className="border-input bg-background hover:bg-accent hover:text-accent-foreground mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
+            >
+              {ssoLoading ? <Spinner /> : <ShieldCheckIcon className="size-4" />}
+              Continue with SAML SSO
+            </button>
+          ) : null}
 
           <div className="text-muted-foreground flex items-center gap-3 py-4 text-xs uppercase tracking-wide">
             <span className="bg-border h-px flex-1" />

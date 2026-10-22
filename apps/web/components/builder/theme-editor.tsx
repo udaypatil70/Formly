@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import {
   CheckIcon,
+  CopyIcon,
   Paintbrush2Icon,
   PencilIcon,
   PlusIcon,
@@ -79,9 +80,27 @@ export function ThemeSection({
   const [editing, setEditing] = useState<
     { mode: "create" } | { mode: "edit"; theme: BuilderTheme } | null
   >(null);
+  const session = trpc.auth.getSession.useQuery();
+  const utils = trpc.useUtils();
+  const duplicate = trpc.theme.duplicate.useMutation();
 
+  const userId = session.data?.user?.id;
   const builtIn = themes.filter((t) => !t.ownerId);
-  const mine = themes.filter((t) => t.ownerId);
+  const mine = themes.filter((t) => t.ownerId === userId);
+  const community = themes.filter(
+    (t) => t.ownerId && t.ownerId !== userId && t.isPublic,
+  );
+  const duplicateTheme = async (theme: BuilderTheme) => {
+    if (!theme.id) return;
+    try {
+      const copy = await duplicate.mutateAsync({ id: theme.id });
+      await utils.theme.getAll.invalidate();
+      onSelect(mapTheme(copy));
+      toast.success("Theme copied to your themes");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not copy theme");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,6 +130,7 @@ export function ThemeSection({
                 active={selected?.id === t.id}
                 onSelect={(th) => onSelect(th)}
                 onEdit={() => setEditing({ mode: "edit", theme: t })}
+                onDuplicate={() => void duplicateTheme(t)}
               />
             ))}
           </div>
@@ -129,10 +149,30 @@ export function ThemeSection({
               active={selected?.id === t.id}
               onSelect={(th) => onSelect(th)}
               onEdit={undefined}
+              onDuplicate={() => void duplicateTheme(t)}
             />
           ))}
         </div>
       </div>
+
+      {community.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Community marketplace
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            {community.map((t) => (
+              <ThemeSwatch
+                key={t.id}
+                theme={t}
+                active={selected?.id === t.id}
+                onSelect={(th) => onSelect(th)}
+                onDuplicate={() => void duplicateTheme(t)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {editing ? (
         <ThemeEditorDialog
@@ -154,11 +194,13 @@ function ThemeSwatch({
   active,
   onSelect,
   onEdit,
+  onDuplicate,
 }: {
   theme: BuilderTheme;
   active: boolean;
   onSelect: (theme: BuilderTheme) => void;
   onEdit?: (() => void) | undefined;
+  onDuplicate?: (() => void) | undefined;
 }) {
   return (
     <div
@@ -199,6 +241,19 @@ function ThemeSwatch({
           className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
         >
           <PencilIcon className="size-3.5" />
+        </button>
+      ) : null}
+      {onDuplicate ? (
+        <button
+          type="button"
+          aria-label={`Copy ${theme.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDuplicate();
+          }}
+          className="absolute right-2 bottom-2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <CopyIcon className="size-3.5" />
         </button>
       ) : null}
       {active ? (
@@ -290,9 +345,10 @@ function ThemeEditorDialog({
   const create = trpc.theme.create.useMutation();
   const update = trpc.theme.update.useMutation();
   const remove = trpc.theme.delete.useMutation();
+  const share = trpc.theme.share.useMutation();
   const utils = trpc.useUtils();
 
-  const saving = create.isPending || update.isPending;
+  const saving = create.isPending || update.isPending || share.isPending;
 
   const buildBackground = (): BuilderThemeBackground | undefined => {
     switch (bgMode) {
@@ -349,6 +405,21 @@ function ThemeEditorDialog({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to delete theme";
       toast.error(message);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!initial?.id) return;
+    try {
+      const saved = await share.mutateAsync({
+        id: initial.id,
+        isPublic: !initial.isPublic,
+      });
+      await utils.theme.getAll.invalidate();
+      onSaved(mapTheme(saved));
+      toast.success(saved.isPublic ? "Theme published to the marketplace" : "Theme removed from the marketplace");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update theme sharing");
     }
   };
 
@@ -487,15 +558,25 @@ function ThemeEditorDialog({
         <DialogFooter className="flex items-center justify-between gap-2">
           <div>
             {mode === "edit" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={handleDelete}
-                disabled={remove.isPending}
-              >
-                <Trash2Icon /> Delete
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleShare()}
+                  disabled={saving}
+                >
+                  {initial?.isPublic ? "Unpublish" : "Share"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleDelete}
+                  disabled={remove.isPending}
+                >
+                  <Trash2Icon /> Delete
+                </Button>
+              </div>
             )}
           </div>
           <div className="flex gap-2">
@@ -564,6 +645,7 @@ export function mapTheme(
     colors: BuilderTheme["colors"];
     background?: BuilderThemeBackground | null;
     ownerId?: string | null;
+    isPublic?: boolean;
   },
 ): BuilderTheme {
   return {
@@ -574,5 +656,6 @@ export function mapTheme(
     colors: t.colors,
     background: t.background ?? null,
     ownerId: t.ownerId ?? null,
+    isPublic: t.isPublic ?? false,
   };
 }

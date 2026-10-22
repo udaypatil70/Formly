@@ -1,5 +1,6 @@
 export * from "./models/user";
 export * from "./models/auth";
+export * from "./models/audit";
 export * from "./models/form";
 export * from "./models/rate-limit";
 export * from "./models/plan";

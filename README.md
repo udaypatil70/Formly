@@ -118,7 +118,7 @@ Fill in at least the required values (see [Configuration Reference](#configurati
 pnpm db:migrate
 ```
 
-Optionally seed the template catalog:
+Seed the template catalog and the 60 built-in themes:
 
 ```bash
 pnpm --filter @repo/db db:seed
@@ -154,6 +154,14 @@ All configuration is loaded via `.env` at the repo root (workspaces share it thr
 | `PORT` | API port (default `8000`) |
 | `NODE_ENV` | `development` or `prod` — CORS is only enabled when **not** `prod` |
 
+### Enterprise operations
+
+- Enterprise SAML SSO is configured per account (this project does not have an organization or membership model). An existing Formly account must publish the DNS TXT challenge shown in Profile before SSO sign-in is enabled. New account creation through SSO is disabled.
+- Audit events are recorded for successful Enterprise tRPC mutations. Audit records and expired form drafts are removed by the API server's daily retention sweeper; audit records are retained for 90 days and drafts expire after 90 days.
+- Analytics charts receive PostgreSQL notification events over server-sent events, with periodic polling retained as a fallback. The API server therefore needs a PostgreSQL connection that supports `LISTEN`/`NOTIFY`.
+- Run `pnpm --filter @repo/db db:seed` after migrations to populate the full built-in theme catalog. Users can share and duplicate themes through the builder's theme editor.
+- No dedicated success-manager service or 99.9% uptime SLA is provided.
+
 ### Optional (leave empty to disable the feature)
 
 | Variable | Purpose |
@@ -181,7 +189,7 @@ All configuration is loaded via `.env` at the repo root (workspaces share it thr
 | `pnpm format` | Format code with Prettier |
 | `pnpm db:migrate` | Apply database migrations |
 | `pnpm db:generate` | Generate migrations from schema changes |
-| `pnpm db:seed` | Seed the template catalog |
+| `pnpm db:seed` | Seed the template catalog and built-in theme catalog |
 | `pnpm --filter @repo/db dev` | Open Drizzle Studio (DB browser) |
 
 ## Webhooks

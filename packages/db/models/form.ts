@@ -232,6 +232,7 @@ export const formDraftsTable = pgTable(
     index("form_drafts_form_id_idx").on(table.formId),
     index("form_drafts_resume_token_idx").on(table.resumeToken),
     index("form_drafts_visitor_id_idx").on(table.visitorId),
+    index("form_drafts_expires_at_idx").on(table.expiresAt),
   ],
 );
 
@@ -306,6 +307,7 @@ export const themesTable = pgTable("themes", {
   ownerId: uuid("owner_id").references(() => usersTable.id, {
     onDelete: "cascade",
   }),
+  isPublic: boolean("is_public").default(false).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   category: themeCategoryEnum("category").default("community").notNull(),
   font: varchar("font", { length: 100 }),
