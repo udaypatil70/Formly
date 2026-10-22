@@ -148,6 +148,13 @@
       "when": 1792582502544,
       "tag": "0020_futuristic_valeria_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792686239025,
+      "tag": "0021_futuristic_sinister_six",
+      "breakpoints": true
     }
   ]
 }

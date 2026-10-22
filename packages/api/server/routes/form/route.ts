@@ -279,10 +279,35 @@ export const formRouter = router({
 
       const baseSettings = input.settings ?? form.settings;
       const nextSettings = { ...(baseSettings ?? {}) };
-      if (nextSettings.password) {
+      // Settings forms round-trip the masked/hashed value they loaded. Only a
+      // changed plaintext value may be hashed again, otherwise every unrelated
+      // settings save would re-hash the existing hash and break the password.
+      if (
+        nextSettings.password &&
+        nextSettings.password !== form.settings?.password
+      ) {
         nextSettings.password = await hashPassword(
           nextSettings.password as string,
         );
+      }
+
+      const opensAt = nextSettings.opensAt
+        ? new Date(nextSettings.opensAt)
+        : null;
+      const closesAt = nextSettings.closesAt
+        ? new Date(nextSettings.closesAt)
+        : null;
+      if (
+        opensAt &&
+        !isNaN(opensAt.getTime()) &&
+        closesAt &&
+        !isNaN(closesAt.getTime()) &&
+        opensAt.getTime() >= closesAt.getTime()
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The closing time must be after the opening time",
+        });
       }
 
       // Turning notifications on is a paid capability; clearing them or editing

@@ -126,8 +126,22 @@ export const formsTable = pgTable(
     settings: jsonb("settings")
       .$type<{
         password?: string;
-        expiry?: string;
-        responseLimit?: number;
+          /** Legacy single close date. `closesAt` is the preferred field. */
+          expiry?: string | null;
+          /** When the form starts accepting responses (ISO timestamp). */
+          opensAt?: string | null;
+          /** When the form stops accepting responses (ISO timestamp). */
+          closesAt?: string | null;
+          /** Soft target: the form closes once this many responses exist. */
+          responseTarget?: number | null;
+          /** Absolute cap on stored responses. */
+          responseLimit?: number | null;
+          /** Message shown when the form closes early (target/limit/manual). */
+          closeMessage?: string | null;
+        /** Allow the same visitor (IP) to submit more than once. */
+        allowMultipleResponses?: boolean;
+        /** Let respondents reopen their submission with their edit token. */
+        allowResponseEditing?: boolean;
         thankYouMessage?: string;
         stepMode?: "all" | "page" | "question";
         notifyOnResponse?: boolean;
@@ -204,6 +218,12 @@ export const formDraftsTable = pgTable(
     resumeToken: varchar("resume_token", { length: 128 }).notNull().unique(),
     answers: jsonb("answers").$type<Record<string, unknown>>().default({}),
     currentStep: integer("current_step").default(0).notNull(),
+    /** Salted hash of the creator's IP; ties the token to one visitor. */
+    ipHash: varchar("ip_hash", { length: 64 }),
+    /** Browser-scoped visitor id, so a draft cannot be replayed elsewhere. */
+    visitorId: varchar("visitor_id", { length: 64 }),
+    /** Optional email captured from the draft, for owner-side identification. */
+    email: varchar("email", { length: 320 }),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
@@ -211,6 +231,7 @@ export const formDraftsTable = pgTable(
   (table) => [
     index("form_drafts_form_id_idx").on(table.formId),
     index("form_drafts_resume_token_idx").on(table.resumeToken),
+    index("form_drafts_visitor_id_idx").on(table.visitorId),
   ],
 );
 
@@ -398,11 +419,21 @@ export const responsesTable = pgTable(
     completedInSeconds: integer("completed_in_seconds"),
     device: varchar("device", { length: 20 }),
     browser: varchar("browser", { length: 20 }),
+    /** Secret shared with the respondent so they can edit their answers. */
+    editToken: varchar("edit_token", { length: 128 }),
+    editTokenExpiresAt: timestamp("edit_token_expires_at"),
+    editedAt: timestamp("edited_at"),
+    /** Owner/admin annotations; never exposed on the public form. */
+    notes: text("notes"),
+    tags: jsonb("tags").$type<string[]>().default([]).notNull(),
+    starred: boolean("starred").default(false).notNull(),
   },
   (table) => [
     index("responses_form_id_idx").on(table.formId),
     index("responses_submitted_at_idx").on(table.submittedAt),
     index("responses_ip_hash_idx").on(table.ipHash),
+    index("responses_form_id_ip_hash_idx").on(table.formId, table.ipHash),
+    uniqueIndex("responses_edit_token_idx").on(table.editToken),
   ],
 );
 

@@ -41,7 +41,11 @@ const deleteInput = z.object({ id: z.string().uuid() });
 export const responseViewOutput = z.object({
   id: z.string().uuid(),
   submittedAt: z.string(),
+  editedAt: z.string().nullable().optional(),
   completedInSeconds: z.number().int().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  tags: z.array(z.string()),
+  starred: z.boolean(),
   answers: z.array(
     z.object({
       fieldId: z.string().uuid(),
@@ -148,7 +152,11 @@ export const responseRouter = router({
         responses: rows.map((row) => ({
           id: row.id,
           submittedAt: row.submittedAt.toISOString(),
+          editedAt: row.editedAt ? row.editedAt.toISOString() : null,
           completedInSeconds: row.completedInSeconds,
+          notes: row.notes,
+          tags: row.tags ?? [],
+          starred: row.starred,
           answers: answers
             .filter((a) => a.responseId === row.id)
             .map((a) => ({
@@ -229,6 +237,10 @@ export const responseRouter = router({
         '"submitted_at"',
         ...fields.map((f) => csvEscape(f.label)),
         '"completed_in_seconds"',
+        '"starred"',
+        '"tags"',
+        '"notes"',
+        '"edited_at"',
       ].join(",");
 
       const rows = responseRows.map((response) => {
@@ -242,6 +254,10 @@ export const responseRouter = router({
           csvEscape(response.submittedAt.toISOString()),
           ...cells,
           csvEscape(response.completedInSeconds ?? null),
+          csvEscape(response.starred ? "yes" : "no"),
+          csvEscape(response.tags ?? []),
+          csvEscape(response.notes ?? null),
+          csvEscape(response.editedAt ? response.editedAt.toISOString() : null),
         ].join(",");
       });
 
@@ -268,7 +284,13 @@ export const responseRouter = router({
         id: z.string().uuid(),
         // Shape is enforced below by the form's own field schema, the same
         // validation a submission goes through.
-        answers: z.record(z.string().uuid(), z.unknown()),
+        answers: z.record(z.string().uuid(), z.unknown()).optional(),
+        notes: z.string().max(10_000).nullable().optional(),
+        tags: z
+          .array(z.string().trim().min(1).max(50))
+          .max(20)
+          .optional(),
+        starred: z.boolean().optional(),
       }),
     )
     .output(responseViewOutput)
@@ -295,45 +317,52 @@ export const responseRouter = router({
           .map((f) => f.id),
       );
 
-      const submittedFieldIds = Object.keys(input.answers);
-      const foreign = submittedFieldIds.filter((id) => !editableIds.has(id));
-      if (foreign.length > 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `These fields cannot be edited: ${foreign.join(", ")}`,
-        });
+      let changed: [string, unknown][] = [];
+      if (input.answers) {
+        const submittedFieldIds = Object.keys(input.answers);
+        const foreign = submittedFieldIds.filter((id) => !editableIds.has(id));
+        if (foreign.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `These fields cannot be edited: ${foreign.join(", ")}`,
+          });
+        }
+
+        // Merge onto the current answers so omitting a field clears nothing.
+        const existing = await db
+          .select()
+          .from(answersTable)
+          .where(eq(answersTable.responseId, response.id))
+          .execute();
+        const merged: Record<string, unknown> = {};
+        for (const answer of existing) {
+          if (editableIds.has(answer.fieldId)) merged[answer.fieldId] = answer.value;
+        }
+        Object.assign(merged, input.answers);
+
+        const parsed = buildResponseSchema(validatorFields)
+          .partial()
+          .safeParse(merged);
+        if (!parsed.success) {
+          const issues = parsed.error.issues.map(
+            (issue) => `${String(issue.path[0])}: ${issue.message}`,
+          );
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Invalid response: ${issues.join("; ")}`,
+          });
+        }
+        changed = Object.entries(input.answers).map(([fieldId]) => [
+          fieldId,
+          parsed.data[fieldId] ?? null,
+        ]);
       }
 
-      // Merge onto the current answers so omitting a field clears nothing.
-      const existing = await db
-        .select()
-        .from(answersTable)
-        .where(eq(answersTable.responseId, response.id))
-        .execute();
-      const merged: Record<string, unknown> = {};
-      for (const answer of existing) {
-        if (editableIds.has(answer.fieldId)) merged[answer.fieldId] = answer.value;
-      }
-      Object.assign(merged, input.answers);
-
-      const parsed = buildResponseSchema(validatorFields)
-        .partial()
-        .safeParse(merged);
-      if (!parsed.success) {
-        const issues = parsed.error.issues.map(
-          (issue) => `${issue.path.join(".")}: ${issue.message}`,
-        );
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Invalid response: ${issues.join("; ")}`,
-        });
-      }
-
-      const changed = Object.entries(input.answers);
       await db.transaction(async (tx) => {
-        // Replace rather than upsert: an owner clearing a field sends null, and
-        // deleting first keeps one row per field without a unique constraint.
         if (changed.length > 0) {
+          // Replace rather than upsert: an owner clearing a field sends null,
+          // and deleting first keeps one row per field without a unique
+          // constraint.
           await tx
             .delete(answersTable)
             .where(
@@ -352,9 +381,31 @@ export const responseRouter = router({
               changed.map(([fieldId, value]) => ({
                 responseId: response.id,
                 fieldId,
-                value: (parsed.data[fieldId] ?? null) as never,
+                value: value as never,
               })),
             )
+            .execute();
+        }
+
+        if (
+          input.notes !== undefined ||
+          input.tags !== undefined ||
+          input.starred !== undefined ||
+          changed.length > 0
+        ) {
+          await tx
+            .update(responsesTable)
+            .set({
+              ...(input.notes !== undefined
+                ? { notes: input.notes?.trim() ? input.notes : null }
+                : {}),
+              ...(input.tags !== undefined
+                ? { tags: [...new Set(input.tags)] }
+                : {}),
+              ...(input.starred !== undefined ? { starred: input.starred } : {}),
+              ...(changed.length > 0 ? { editedAt: new Date() } : {}),
+            })
+            .where(eq(responsesTable.id, response.id))
             .execute();
         }
       });
@@ -364,19 +415,27 @@ export const responseRouter = router({
         .from(answersTable)
         .where(eq(answersTable.responseId, response.id))
         .execute();
+      const [updated] = await db
+        .select()
+        .from(responsesTable)
+        .where(eq(responsesTable.id, response.id))
+        .limit(1)
+        .execute();
 
-      // Emitted from the committed state rather than from what was sent, so a
-      // receiver sees the response as it now stands — including answers this
-      // edit did not touch — exactly as `response.created` delivered it.
-      void emitResponseUpdated({
-        form,
-        fields: validatorFields,
-        answers: Object.fromEntries(
-          finalAnswers.map((answer) => [answer.fieldId, answer.value]),
-        ),
-        responseId: response.id,
-        submittedAt: response.submittedAt.toISOString(),
-      });
+      if (changed.length > 0) {
+        // Emitted from the committed state rather than from what was sent, so a
+        // receiver sees the response as it now stands — including answers this
+        // edit did not touch — exactly as `response.created` delivered it.
+        void emitResponseUpdated({
+          form,
+          fields: validatorFields,
+          answers: Object.fromEntries(
+            finalAnswers.map((answer) => [answer.fieldId, answer.value]),
+          ),
+          responseId: response.id,
+          submittedAt: response.submittedAt.toISOString(),
+        });
+      }
 
       const labelByFieldId = new Map(
         validatorFields.map((f) => [f.id, f.label] as const),
@@ -385,7 +444,11 @@ export const responseRouter = router({
       return {
         id: response.id,
         submittedAt: response.submittedAt.toISOString(),
+        editedAt: updated?.editedAt ? updated.editedAt.toISOString() : null,
         completedInSeconds: response.completedInSeconds,
+        notes: updated?.notes ?? null,
+        tags: updated?.tags ?? [],
+        starred: updated?.starred ?? false,
         answers: finalAnswers.map((answer) => ({
           fieldId: answer.fieldId,
           fieldLabel: labelByFieldId.get(answer.fieldId) ?? "Unknown field",

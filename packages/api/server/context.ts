@@ -27,6 +27,26 @@ function resolveIp(req: IncomingMessage): string | null {
   return first || socketIp;
 }
 
+/**
+ * Resolves the browser-scoped visitor id used to bind drafts and anonymous
+ * response edits. It is a random id created by the public client, never a
+ * fingerprint, so a visitor can clear it at any time by clearing site data.
+ */
+function resolveVisitorId(req: IncomingMessage): string | null {
+  const header = req.headers["x-formly-visitor"];
+  const raw = Array.isArray(header) ? header[0] : header;
+  const candidate = raw?.toString().trim();
+
+  if (candidate && /^[A-Za-z0-9_-]{8,64}$/.test(candidate)) {
+    return candidate;
+  }
+
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const match = /(?:^|;\s*)formly_visitor=([A-Za-z0-9_-]{8,64})/.exec(cookieHeader);
+  return match?.[1] ?? null;
+}
+
 export async function createContext({ req }: { req: IncomingMessage }) {
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -41,6 +61,7 @@ export async function createContext({ req }: { req: IncomingMessage }) {
     session,
     user: session?.user ?? null,
     ip: resolveIp(req),
+    visitorId: resolveVisitorId(req),
     headers,
   };
 }

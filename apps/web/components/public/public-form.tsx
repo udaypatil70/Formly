@@ -1,5 +1,9 @@
 import React, { useMemo, useRef, useState } from "react";
-import { buildResponseSchema, type Field } from "@repo/validators";
+import {
+  buildResponseSchema,
+  isFieldVisible,
+  type Field,
+} from "@repo/validators";
 import {
   CheckCircle2Icon,
   CreditCardIcon,
@@ -67,6 +71,12 @@ interface PublicFormProps {
   onDraftToken?: (token: string) => void;
   /** Renders the "Save & continue later" control (hidden in previews). */
   showSaveDraft?: boolean;
+  /** Called after the draft is deleted so the parent can clear the URL/state. */
+  onDraftDeleted?: () => void;
+  /** Edit token for the response being reopened, if any. */
+  editToken?: string;
+  /** True while editing an existing response. */
+  editMode?: boolean;
 }
 
 const TURNSTILE_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
@@ -120,50 +130,6 @@ function loadCheckoutScript(): Promise<void> {
     document.body.appendChild(script);
   });
   return checkoutScriptPromise;
-}
-
-type ConditionalRule = NonNullable<PublicField["conditionalLogic"]>["showIf"] & {
-  operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
-};
-
-function evalRule(rule: ConditionalRule, values: Record<string, unknown>): boolean {
-  const sourceValue = values[rule.fieldId];
-  switch (rule.operator) {
-    case "equals":
-      return sourceValue === rule.value;
-    case "not_equals":
-      return sourceValue !== rule.value;
-    case "contains":
-      return Array.isArray(sourceValue)
-        ? sourceValue.includes(rule.value as string)
-        : String(sourceValue ?? "").includes(String(rule.value));
-    case "greater_than":
-      return Number(sourceValue) > Number(rule.value);
-    case "less_than":
-      return Number(sourceValue) < Number(rule.value);
-    default:
-      return true;
-  }
-}
-
-function evalRuleRef(rule: ConditionalRule, values: Record<string, unknown>): boolean {
-  return evalRule(rule, values);
-}
-
-function fieldIsVisible(field: PublicField, values: Record<string, unknown>): boolean {
-  const logic = field.conditionalLogic;
-  if (!logic) return true;
-
-  if (logic.showIf && !evalRuleRef(logic.showIf, values)) return false;
-
-  const groups = logic.groups ?? [];
-  if (groups.length === 0) return true;
-
-  return groups.some((group) => {
-    if (group.conditions.length === 0) return false;
-    const results = group.conditions.map((c) => evalRuleRef(c, values));
-    return group.all ? results.every(Boolean) : results.some(Boolean);
-  });
 }
 
 // ─── Answer piping ({{fieldId}} tokens) ────────────────────
@@ -774,6 +740,9 @@ export function PublicForm({
   draftToken,
   onDraftToken,
   showSaveDraft = false,
+  onDraftDeleted,
+  editToken,
+  editMode = false,
 }: PublicFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>(
     initialValues ?? {},
@@ -791,18 +760,21 @@ export function PublicForm({
   const [draftCopied, setDraftCopied] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const saveDraft = trpc.public.saveDraft.useMutation();
+  const deleteDraft = trpc.public.deleteDraft.useMutation();
 
   const stepMode = form.settings?.stepMode ?? "all";
   const startScreen = form.settings?.startScreen;
   const endScreen = form.settings?.endScreen;
   const showStartScreen = Boolean(
-    startScreen?.enabled && !started && !submitted,
+    startScreen?.enabled && !started && !submitted && !editMode,
   );
 
   const visibleFields = useMemo(
     () =>
       form.fields.filter(
-        (f) => f.type !== "page_break" && fieldIsVisible(f, values),
+        (f) =>
+          f.type !== "page_break" &&
+          isFieldVisible(f.conditionalLogic, values),
       ),
     [form.fields, values],
   );
@@ -832,7 +804,7 @@ export function PublicForm({
         pages.push([]);
         continue;
       }
-      if (fieldIsVisible(f, values)) {
+      if (isFieldVisible(f.conditionalLogic, values)) {
         pages[pages.length - 1]!.push(f);
       }
     }
@@ -881,11 +853,22 @@ export function PublicForm({
   };
 
   if (submitted) {
-    const endTitle = endScreen?.title?.trim() || "Response submitted";
+    const endTitle = editMode
+      ? "Response updated"
+      : endScreen?.title?.trim() || "Response submitted";
     const endMessage =
       endScreen?.message?.trim() ||
       form.settings?.thankYouMessage?.trim() ||
-      "Thank you! Your response has been recorded.";
+      (editMode
+        ? "Your changes have been saved."
+        : "Thank you! Your response has been recorded.");
+    const openEditLink = () => {
+      if (!editToken) return;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("draft");
+      url.searchParams.set("response", editToken);
+      window.location.assign(url.toString());
+    };
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <CheckCircle2Icon
@@ -894,20 +877,29 @@ export function PublicForm({
         />
         <h2 className="text-2xl font-semibold">{endTitle}</h2>
         <p className="text-muted-foreground">{endMessage}</p>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setSubmitted(false);
-            setValues({});
-            setErrors({});
-            paymentsRef.current = [];
-            setStarted(true);
-            setCurrentStep(0);
-            onReset?.();
-          }}
-        >
-          {endScreen?.buttonLabel?.trim() || "Submit another response"}
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {editToken ? (
+            <Button variant="outline" onClick={openEditLink}>
+              Edit this response
+            </Button>
+          ) : null}
+          {form.settings?.allowMultipleResponses === true ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSubmitted(false);
+                setValues({});
+                setErrors({});
+                paymentsRef.current = [];
+                setStarted(true);
+                setCurrentStep(0);
+                onReset?.();
+              }}
+            >
+              {endScreen?.buttonLabel?.trim() || "Submit another response"}
+            </Button>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -980,6 +972,7 @@ export function PublicForm({
       void handleSubmit(e);
       return;
     }
+    if (showSaveDraft && draftToken) void handleSaveDraft();
     if (jump.kind === "step") {
       goToStep(jump.target);
       return;
@@ -989,6 +982,7 @@ export function PublicForm({
 
   const handleBack = (e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.preventDefault();
+    if (showSaveDraft && draftToken) void handleSaveDraft();
     goToStep(safeStep - 1);
   };
 
@@ -1061,6 +1055,21 @@ export function PublicForm({
     }
   };
 
+  const handleDeleteDraft = async () => {
+    if (!slug || !draftToken) return;
+    setDraftError(null);
+    try {
+      await deleteDraft.mutateAsync({ slug, token: draftToken });
+      setDraftLink(null);
+      setDraftCopied(false);
+      onDraftDeleted?.();
+    } catch (err) {
+      setDraftError(
+        err instanceof Error ? err.message : "Could not discard your draft",
+      );
+    }
+  };
+
   const copyDraftLink = async () => {
     if (!draftLink) return;
     try {
@@ -1109,6 +1118,15 @@ export function PublicForm({
           ) : null}
           {form.requiresPassword ? (
             <p className="mt-2 text-xs opacity-60">Password protected form</p>
+          ) : null}
+          {editMode ? (
+            <p
+              className="mt-3 rounded-md border px-3 py-2 text-xs"
+              style={{ borderColor: `${primary}55`, backgroundColor: `${primary}14` }}
+            >
+              You are editing a submitted response. Changes replace the
+              original answers.
+            </p>
           ) : null}
 
           {!isSinglePage && totalSteps > 0 && (
@@ -1259,7 +1277,7 @@ export function PublicForm({
 
                 {showSaveDraft && (
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-4">
                       <button
                         type="button"
                         disabled={savingDraft}
@@ -1268,6 +1286,16 @@ export function PublicForm({
                       >
                         {savingDraft ? "Saving…" : "Save & continue later"}
                       </button>
+                      {draftToken ? (
+                        <button
+                          type="button"
+                          disabled={deleteDraft.isPending}
+                          onClick={() => void handleDeleteDraft()}
+                          className="text-xs text-destructive underline-offset-4 opacity-80 transition-opacity hover:opacity-100 hover:underline"
+                        >
+                          {deleteDraft.isPending ? "Discarding…" : "Discard draft"}
+                        </button>
+                      ) : null}
                     </div>
                     {draftLink ? (
                       <div

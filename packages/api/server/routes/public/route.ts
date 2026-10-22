@@ -1,6 +1,6 @@
 ﻿import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { db, eq, and, or, desc, count, ilike, isNull } from "@repo/db";
+import { db, eq, and, or, desc, count, ilike, isNull, inArray, sql } from "@repo/db";
 import {
   answersTable,
   formsTable,
@@ -17,6 +17,7 @@ import {
   AnswerValueSchema,
   FileAnswerValueSchema,
   PaymentAnswerValueSchema,
+  isFieldVisible,
   toMinorUnits,
   fromMinorUnits,
 } from "@repo/validators";
@@ -39,6 +40,7 @@ import {
   emitPaymentEvent,
   emitDraftSaved,
   emitResponseCreated,
+  emitResponseUpdated,
 } from "../../utils/webhooks";
 import { consumeResponseQuota, getUserEntitlements } from "../../utils/plans";
 import { signUploadPath } from "@repo/services/upload-signature";
@@ -53,17 +55,40 @@ const TAGS = ["Public"];
 const hashIp = (ip: string) =>
   createHash("sha256").update(`formly-salt:${ip}`).digest("hex");
 
+const hashVisitor = (visitorId: string | null) =>
+  visitorId
+    ? createHash("sha256").update(`formly-visitor:${visitorId}`).digest("hex")
+    : null;
+
+/** Browser user agents that are never a real respondent. */
+const BOT_USER_AGENT =
+  /(bot\b|crawler|spider|headless|phantomjs|selenium|puppeteer|playwright|python-requests|python-urllib|curl\/|wget\/|go-http-client|java\/|libwww|scrapy)/i;
+
+/** A submission completed faster than this was not filled in by a person. */
+const MIN_COMPLETION_SECONDS = 3;
+
+/** How long a respondent can reopen and edit their submission. */
+const EDIT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 const publicFormViewOutput = z.object({
   id: z.string().uuid(),
   title: z.string(),
   description: z.string().nullable().optional(),
   slug: z.string(),
   visibility: z.enum(["public", "unlisted"]),
+  /** False for unlisted forms; the client renders them with noindex metadata. */
+  listed: z.boolean(),
   customDomain: z.string().nullable().optional(),
   settings: z
     .object({
       expiry: z.string().nullable().optional(),
-      responseLimit: z.number().int().positive().optional(),
+      opensAt: z.string().nullable().optional(),
+      closesAt: z.string().nullable().optional(),
+      responseTarget: z.number().int().positive().nullable().optional(),
+      responseLimit: z.number().int().positive().nullable().optional(),
+      closeMessage: z.string().nullable().optional(),
+      allowMultipleResponses: z.boolean().optional(),
+      allowResponseEditing: z.boolean().optional(),
       thankYouMessage: z.string().nullable().optional(),
       stepMode: z.enum(["all", "page", "question"]).optional(),
       startScreen: z
@@ -87,7 +112,14 @@ const publicFormViewOutput = z.object({
   requiresPassword: z.boolean(),
   locked: z.boolean(),
   incorrectPassword: z.boolean(),
-  blocked: z.enum(["expired", "limit_reached"]).nullish(),
+  blocked: z
+    .enum(["expired", "not_open", "target_reached", "limit_reached"])
+    .nullish(),
+  /** True when this visitor already submitted (unless multiples are allowed). */
+  alreadySubmitted: z.boolean(),
+  /** Present when the visitor arrived with a valid edit token. */
+  editingResponseId: z.string().uuid().nullable().optional(),
+  responseCount: z.number(),
   fields: z.array(fieldOutput),
   theme: themeOutput.nullable(),
 });
@@ -95,6 +127,8 @@ const publicFormViewOutput = z.object({
 const getBySlugInput = z.object({
   slug: z.string().min(1).max(255),
   password: z.string().optional(),
+  /** Reopen a submission for editing; skips the closed/limit gate. */
+  responseToken: z.string().min(16).max(128).optional(),
 });
 
 const saveDraftInput = z.object({
@@ -104,11 +138,26 @@ const saveDraftInput = z.object({
   token: z.string().min(16).max(128).optional(),
   answers: z.record(z.string(), z.unknown()),
   currentStep: z.number().int().nonnegative().optional(),
+  email: z.string().email().max(320).optional(),
 });
 
 const getDraftInput = z.object({
   slug: z.string().min(1).max(255),
   token: z.string().min(16).max(128),
+});
+
+const deleteDraftInput = getDraftInput;
+
+const editResponseInput = z.object({
+  slug: z.string().min(1).max(255),
+  password: z.string().optional(),
+  token: z.string().min(16).max(128),
+});
+
+const updateOwnResponseInput = editResponseInput.extend({
+  completedInSeconds: z.number().int().positive().optional(),
+  answers: z.record(z.string(), z.unknown()),
+  turnstileToken: z.string().optional(),
 });
 
 const resolveDomainInput = z.object({
@@ -147,31 +196,115 @@ async function loadPublishedForm(slug: string): Promise<SelectForm> {
   );
 }
 
-/** Returns "expired" / "limit_reached" when the form should stop accepting views. */
+type BlockedState =
+  | "not_open"
+  | "expired"
+  | "target_reached"
+  | "limit_reached";
+
+async function responseCount(formId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: count() })
+    .from(responsesTable)
+    .where(eq(responsesTable.formId, formId))
+    .execute();
+  return Number(row?.count ?? 0);
+}
+
+/** Parses a settings timestamp, returning null for missing/invalid values. */
+function parseSettingDate(value: string | undefined | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Returns the state that stops the form accepting new responses.
+ *
+ * The schedule is an explicit `opensAt`/`closesAt` window; the legacy
+ * `expiry` is still honoured as a close date for existing forms. A
+ * `responseTarget` is a soft close and `responseLimit` remains the absolute
+ * cap, so either can stop submissions with the owner's `closeMessage`.
+ */
 async function blockedState(
   form: SelectForm,
-): Promise<"expired" | "limit_reached" | null> {
+  currentCount?: number,
+): Promise<BlockedState | null> {
   const settings = form.settings ?? {};
+  const now = Date.now();
 
-  if (settings.expiry) {
-    const expiry = new Date(settings.expiry);
-    if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
-      return "expired";
-    }
+  const opensAt = parseSettingDate(settings.opensAt);
+  if (opensAt && now < opensAt.getTime()) {
+    return "not_open";
   }
 
-  if (settings.responseLimit) {
-    const [countRow] = await db
-      .select({ count: count() })
-      .from(responsesTable)
-      .where(eq(responsesTable.formId, form.id))
-      .execute();
-    if (Number(countRow?.count ?? 0) >= settings.responseLimit) {
-      return "limit_reached";
-    }
+  const closesAt = parseSettingDate(settings.closesAt);
+  const legacyExpiry = parseSettingDate(settings.expiry);
+  const closeTime = Math.min(
+    closesAt?.getTime() ?? Number.POSITIVE_INFINITY,
+    legacyExpiry?.getTime() ?? Number.POSITIVE_INFINITY,
+  );
+  if (closeTime <= now) {
+    return "expired";
+  }
+
+  const total = currentCount ?? (await responseCount(form.id));
+  if (settings.responseTarget && total >= settings.responseTarget) {
+    return "target_reached";
+  }
+  if (settings.responseLimit && total >= settings.responseLimit) {
+    return "limit_reached";
   }
 
   return null;
+}
+
+/**
+ * A draft is bound to the browser that created it. Visitor id is preferred;
+ * the IP hash is the fallback for clients that do not send one. Drafts created
+ * before binding was added have neither and are allowed to migrate in place.
+ */
+function draftBelongsToVisitor(
+  draft: { ipHash: string | null; visitorId: string | null },
+  ipHash: string,
+  visitorHash: string | null,
+): boolean {
+  if (draft.visitorId) {
+    return visitorHash !== null && draft.visitorId === visitorHash;
+  }
+  if (draft.ipHash) {
+    return draft.ipHash === ipHash;
+  }
+  return true;
+}
+
+/** Loads a response by edit token, scoped to the form. */
+async function findResponseByEditToken(formId: string, token: string) {
+  const rows = await db
+    .select()
+    .from(responsesTable)
+    .where(
+      and(
+        eq(responsesTable.formId, formId),
+        eq(responsesTable.editToken, token),
+      ),
+    )
+    .limit(1)
+    .execute();
+  return rows[0] ?? null;
+}
+
+/** Rejects a token that has expired. */
+function assertEditTokenFresh(response: { editTokenExpiresAt: Date | null }) {
+  if (
+    response.editTokenExpiresAt &&
+    response.editTokenExpiresAt.getTime() < Date.now()
+  ) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "This edit link has expired",
+    });
+  }
 }
 
 /** Checks the (optional) form password against a submitted attempt. */
@@ -195,6 +328,10 @@ type PublicFormView = z.infer<typeof publicFormViewOutput>;
 async function buildPublicFormView(
   form: SelectForm,
   password?: string,
+  options: {
+    ipHash?: string;
+    editingResponseId?: string | null;
+  } = {},
 ): Promise<PublicFormView> {
   const settings = form.settings ?? {};
   const safeSettings = {
@@ -203,6 +340,7 @@ async function buildPublicFormView(
     notificationEmail: undefined,
   };
   const theme = await getTheme(form.themeId);
+  const total = await responseCount(form.id);
 
   const base = {
     id: form.id,
@@ -210,11 +348,19 @@ async function buildPublicFormView(
     description: form.description,
     slug: form.slug,
     visibility: form.visibility,
+    listed: form.visibility === "public",
     customDomain: form.customDomain,
     settings: safeSettings,
+    responseCount: total,
+    alreadySubmitted: false,
+    editingResponseId: options.editingResponseId ?? null,
   };
 
-  const blocked = await blockedState(form);
+  // A valid edit token reopens the form even after it closed, so a respondent
+  // can correct the submission they already own.
+  const blocked = options.editingResponseId
+    ? null
+    : await blockedState(form, total);
   if (blocked) {
     return {
       ...base,
@@ -240,9 +386,30 @@ async function buildPublicFormView(
     };
   }
 
+  let alreadySubmitted = false;
+  if (
+    !options.editingResponseId &&
+    options.ipHash &&
+    settings.allowMultipleResponses !== true
+  ) {
+    const [duplicate] = await db
+      .select({ id: responsesTable.id })
+      .from(responsesTable)
+      .where(
+        and(
+          eq(responsesTable.formId, form.id),
+          eq(responsesTable.ipHash, options.ipHash),
+        ),
+      )
+      .limit(1)
+      .execute();
+    alreadySubmitted = Boolean(duplicate);
+  }
+
   const fields = await getFieldsForForm(form.id);
   return {
     ...base,
+    alreadySubmitted,
     requiresPassword: false,
     locked: false,
     incorrectPassword: false,
@@ -252,6 +419,23 @@ async function buildPublicFormView(
     ),
     theme: serializeTheme(theme),
   };
+}
+
+/**
+ * Resolves a response edit token for a slug, returning the response row when
+ * it is valid. Used by both the renderer (to reopen a closed form) and the
+ * edit endpoint.
+ */
+async function resolveEditResponse(
+  form: SelectForm,
+  token: string | undefined,
+) {
+  if (!token) return null;
+  if (form.settings?.allowResponseEditing === false) return null;
+  const response = await findResponseByEditToken(form.id, token);
+  if (!response) return null;
+  assertEditTokenFresh(response);
+  return response;
 }
 
 const DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -292,9 +476,20 @@ export const publicRouter = router({
         }
       }
 
-      const view = await buildPublicFormView(form, input.password);
+      const editResponse = await resolveEditResponse(form, input.responseToken);
+      if (input.responseToken && !editResponse) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This edit link is invalid",
+        });
+      }
 
-      if (view.locked || view.blocked) {
+      const view = await buildPublicFormView(form, input.password, {
+        ipHash: hashIp(ipKey),
+        editingResponseId: editResponse?.id ?? null,
+      });
+
+      if (view.locked || view.blocked || view.alreadySubmitted || editResponse) {
         return view;
       }
 
@@ -356,7 +551,9 @@ export const publicRouter = router({
         }
       }
 
-      return buildPublicFormView(form, input.password);
+      return buildPublicFormView(form, input.password, {
+        ipHash: hashIp(ipKey),
+      });
     }),
 
   /** Save a visitor's in-progress answers so they can resume later. */
@@ -384,14 +581,17 @@ export const publicRouter = router({
       const form = await loadPublishedForm(input.slug);
       const settings = form.settings ?? {};
 
-      if (settings.expiry) {
-        const expiry = new Date(settings.expiry);
-        if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "This form has expired",
-          });
-        }
+      const blocked = await blockedState(form);
+      if (blocked) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            blocked === "not_open"
+              ? "This form is not open yet"
+              : blocked === "expired"
+                ? "This form has expired"
+                : "This form is no longer accepting responses",
+        });
       }
 
       if (settings.password) {
@@ -410,34 +610,56 @@ export const publicRouter = router({
       }
 
       const expiresAt = new Date(Date.now() + DRAFT_TTL_MS);
-
-      const existing = input.token
-        ? await db
-            .select({ id: formDraftsTable.id })
-            .from(formDraftsTable)
-            .where(
-              and(
-                eq(formDraftsTable.formId, form.id),
-                eq(formDraftsTable.resumeToken, input.token),
-              ),
-            )
-            .limit(1)
-            .execute()
-        : [];
+      const ipHash = hashIp(ipKey);
+      const visitorHash = hashVisitor(ctx.visitorId);
 
       let token: string;
       let draftId: string;
 
-      if (existing.length > 0) {
-        token = input.token!;
+      if (input.token) {
+        const [draft] = await db
+          .select()
+          .from(formDraftsTable)
+          .where(
+            and(
+              eq(formDraftsTable.formId, form.id),
+              eq(formDraftsTable.resumeToken, input.token),
+            ),
+          )
+          .limit(1)
+          .execute();
+
+        if (!draft) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Draft not found",
+          });
+        }
+        if (draft.expiresAt.getTime() < Date.now()) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This draft has expired",
+          });
+        }
+        if (!draftBelongsToVisitor(draft, ipHash, visitorHash)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This draft belongs to another visitor",
+          });
+        }
+
+        token = input.token;
         const updated = await db
           .update(formDraftsTable)
           .set({
             answers: input.answers,
             currentStep: input.currentStep ?? 0,
+            ipHash,
+            visitorId: visitorHash ?? draft.visitorId,
+            ...(input.email !== undefined ? { email: input.email } : {}),
             expiresAt,
           })
-          .where(eq(formDraftsTable.id, existing[0]!.id))
+          .where(eq(formDraftsTable.id, draft.id))
           .returning({ id: formDraftsTable.id })
           .execute();
         draftId = updated[0]!.id;
@@ -450,6 +672,9 @@ export const publicRouter = router({
             resumeToken: token,
             answers: input.answers,
             currentStep: input.currentStep ?? 0,
+            ipHash,
+            visitorId: visitorHash,
+            email: input.email ?? null,
             expiresAt,
           })
           .returning({ id: formDraftsTable.id })
@@ -478,7 +703,19 @@ export const publicRouter = router({
         expiresAt: z.string(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`draftread:${hashIp(ipKey)}`, {
+        limit: 30,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
       const form = await loadPublishedForm(input.slug);
       const rows = await db
         .select()
@@ -502,11 +739,77 @@ export const publicRouter = router({
           message: "This draft has expired",
         });
       }
+      if (
+        !draftBelongsToVisitor(
+          draft,
+          hashIp(ipKey),
+          hashVisitor(ctx.visitorId),
+        )
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This draft belongs to another visitor",
+        });
+      }
       return {
         answers: draft.answers ?? {},
         currentStep: draft.currentStep ?? 0,
         expiresAt: draft.expiresAt.toISOString(),
       };
+    }),
+
+  /** Delete a saved draft. Bound to the visitor that created it. */
+  deleteDraft: publicProcedure
+    .input(deleteDraftInput)
+    .output(z.object({ success: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`draftdelete:${hashIp(ipKey)}`, {
+        limit: 20,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
+      const form = await loadPublishedForm(input.slug);
+      const rows = await db
+        .select()
+        .from(formDraftsTable)
+        .where(
+          and(
+            eq(formDraftsTable.formId, form.id),
+            eq(formDraftsTable.resumeToken, input.token),
+          ),
+        )
+        .limit(1)
+        .execute();
+
+      const draft = rows[0];
+      if (!draft) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Draft not found" });
+      }
+      if (
+        !draftBelongsToVisitor(
+          draft,
+          hashIp(ipKey),
+          hashVisitor(ctx.visitorId),
+        )
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This draft belongs to another visitor",
+        });
+      }
+
+      await db
+        .delete(formDraftsTable)
+        .where(eq(formDraftsTable.id, draft.id))
+        .execute();
+      return { success: true };
     }),
 
   /** Submit a response to a published form (rate-limited, schema-validated). */
@@ -519,6 +822,8 @@ export const publicRouter = router({
       z.object({
         success: z.boolean(),
         responseId: z.string().uuid(),
+        editToken: z.string().optional(),
+        editUrl: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -555,14 +860,17 @@ export const publicRouter = router({
         }
       }
 
-      if (settings.expiry) {
-        const expiry = new Date(settings.expiry);
-        if (isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "This form has expired",
-          });
-        }
+      const blocked = await blockedState(form);
+      if (blocked) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            blocked === "not_open"
+              ? "This form is not open yet"
+              : blocked === "expired"
+                ? "This form has expired"
+                : "This form is no longer accepting responses",
+        });
       }
 
       if (settings.password) {
@@ -597,27 +905,77 @@ export const publicRouter = router({
         });
       }
 
-      if (settings.responseLimit) {
-        const [countRow] = await db
-          .select({ count: count() })
-          .from(responsesTable)
-          .where(eq(responsesTable.formId, form.id))
-          .execute();
-        if (Number(countRow?.count ?? 0) >= settings.responseLimit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "This form has reached its response limit",
-          });
-        }
+      // Bot heuristics run alongside Turnstile so a deployment without a
+      // Turnstile secret is not an open submission endpoint.
+      const userAgent = ctx.headers.get("user-agent") ?? "";
+      if (!userAgent.trim() || BOT_USER_AGENT.test(userAgent)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This submission looks automated. Please try in a browser.",
+        });
+      }
+      if (
+        input.completedInSeconds !== undefined &&
+        input.completedInSeconds < MIN_COMPLETION_SECONDS
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That was too quick. Please take a moment and try again.",
+        });
+      }
+      if (
+        input.completedInSeconds === undefined &&
+        !process.env.TURNSTILE_SECRET_KEY
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Could not verify this submission. Please reload and try again.",
+        });
       }
 
       const { fields, optionsByField } = await getFieldsForForm(form.id);
       const validatorFields = fields.map((field) =>
         toValidatorField(field, optionsByField.get(field.id)),
       );
-      const responseSchema = buildResponseSchema(validatorFields);
+      const knownFieldIds = new Set(validatorFields.map((f) => f.id));
+      const unknownFieldIds = Object.keys(input.answers).filter(
+        (fieldId) => !knownFieldIds.has(fieldId),
+      );
+      if (unknownFieldIds.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Submission contains unknown fields",
+        });
+      }
 
-      const result = responseSchema.safeParse(input.answers);
+      // Conditional logic is evaluated here with the same rules the renderer
+      // uses. Answers for hidden fields are refused rather than stored and
+      // counted, and hidden fields are never required.
+      const visibleFieldDefs = validatorFields.filter(
+        (field) =>
+          field.type !== "page_break" &&
+          isFieldVisible(field.conditionalLogic, input.answers),
+      );
+      const visibleFieldIds = new Set(visibleFieldDefs.map((f) => f.id));
+      const hiddenAnswered = Object.keys(input.answers).filter(
+        (fieldId) => !visibleFieldIds.has(fieldId),
+      );
+      if (hiddenAnswered.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Answers were submitted for fields that are hidden by the form logic",
+        });
+      }
+
+      const filteredAnswers = Object.fromEntries(
+        Object.entries(input.answers).filter(([fieldId]) =>
+          visibleFieldIds.has(fieldId),
+        ),
+      );
+      const responseSchema = buildResponseSchema(visibleFieldDefs);
+
+      const result = responseSchema.safeParse(filteredAnswers);
       if (!result.success) {
         const issues = result.error.issues.map(
           (issue) => `${issue.path.join(".")}: ${issue.message}`,
@@ -634,7 +992,7 @@ export const publicRouter = router({
       // the stored answer is rebuilt from that row. A fabricated id, an upload
       // made for a different form, or an arbitrary external URL cannot survive
       // this and would otherwise be rendered to the owner as a download link.
-      const fileFields = validatorFields.filter((f) => f.type === "file_upload");
+      const fileFields = visibleFieldDefs.filter((f) => f.type === "file_upload");
       const claimedUploads: { id: string }[] = [];
 
       for (const field of fileFields) {
@@ -692,7 +1050,7 @@ export const publicRouter = router({
       // Payment fields: every one must have a verified, unused Razorpay
       // payment. The payment answer is rebuilt server-side from the order we
       // created, never trusted from the client payload.
-      const paymentFields = validatorFields.filter(
+      const paymentFields = visibleFieldDefs.filter(
         (f) => f.type === "payment",
       );
       // The full payment row is kept so the `payment.paid` webhook that fires
@@ -802,8 +1160,65 @@ export const publicRouter = router({
         await getUserEntitlements(form.ownerId)
       ).entitlements;
 
+      const editToken =
+        settings.allowResponseEditing === false
+          ? null
+          : randomBytes(32).toString("hex");
+      const ipHash = hashIp(ipKey);
+
       const responseId = await db.transaction(async (tx) => {
         const { device, browser } = parseUserAgent(ctx.headers.get("user-agent"));
+
+        // Serialize submissions from the same visitor so two concurrent
+        // requests cannot both pass the duplicate check.
+        if (settings.allowMultipleResponses !== true) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`${form.id}:${ipHash}`}))`,
+          );
+          const [duplicate] = await tx
+            .select({ id: responsesTable.id })
+            .from(responsesTable)
+            .where(
+              and(
+                eq(responsesTable.formId, form.id),
+                eq(responsesTable.ipHash, ipHash),
+              ),
+            )
+            .limit(1)
+            .execute();
+          if (duplicate) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "You have already submitted this form",
+            });
+          }
+        }
+
+        // Re-check the count under a form-scoped lock so a burst of concurrent
+        // submissions cannot push the form past its target/limit.
+        if (settings.responseTarget || settings.responseLimit) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`form-count:${form.id}`}))`,
+          );
+          const [countRow] = await tx
+            .select({ count: count() })
+            .from(responsesTable)
+            .where(eq(responsesTable.formId, form.id))
+            .execute();
+          const total = Number(countRow?.count ?? 0);
+          if (settings.responseTarget && total >= settings.responseTarget) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "This form has reached its response target",
+            });
+          }
+          if (settings.responseLimit && total >= settings.responseLimit) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "This form has reached its response limit",
+            });
+          }
+        }
 
         // Counted inside the transaction so a later failure (e.g. a payment
         // constraint) rolls the counter back along with the response.
@@ -813,10 +1228,14 @@ export const publicRouter = router({
           .insert(responsesTable)
           .values({
             formId: form.id,
-            ipHash: hashIp(ipKey),
+            ipHash,
             completedInSeconds: input.completedInSeconds ?? null,
             device,
             browser,
+            editToken,
+            editTokenExpiresAt: editToken
+              ? new Date(Date.now() + EDIT_TOKEN_TTL_MS)
+              : null,
           })
           .returning()
           .execute();
@@ -878,7 +1297,7 @@ export const publicRouter = router({
 
       void notifyNewResponse({
         form,
-        fields: validatorFields,
+        fields: visibleFieldDefs,
         answers: result.data,
         responseId: responseId.id,
         submittedAt: responseId.submittedAt.toISOString(),
@@ -903,13 +1322,279 @@ export const publicRouter = router({
 
       void emitResponseCreated({
         form,
-        fields: validatorFields,
+        fields: visibleFieldDefs,
         answers: result.data,
         responseId: responseId.id,
         submittedAt: responseId.submittedAt.toISOString(),
       });
 
-      return { success: true, responseId: responseId.id };
+      return {
+        success: true,
+        responseId: responseId.id,
+        ...(editToken
+          ? {
+              editToken,
+              editUrl: `/form/${form.slug}?response=${editToken}`,
+            }
+          : {}),
+      };
+    }),
+
+  /** Load the answers behind a respondent's edit link. */
+  getResponseForEdit: publicProcedure
+    .input(editResponseInput)
+    .output(
+      z.object({
+        responseId: z.string().uuid(),
+        answers: z.record(z.string(), z.unknown()),
+        submittedAt: z.string(),
+        editedAt: z.string().nullable(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`editread:${hashIp(ipKey)}`, {
+        limit: 30,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests, please try again later",
+        });
+      }
+
+      const form = await loadPublishedForm(input.slug);
+      if (form.settings?.allowResponseEditing === false) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Response editing is disabled for this form",
+        });
+      }
+      if (form.settings?.password) {
+        if (!input.password) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form is password protected",
+          });
+        }
+        if (!(await verifyPassword(input.password, form.settings.password))) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Incorrect password",
+          });
+        }
+      }
+
+      const response = await findResponseByEditToken(form.id, input.token);
+      if (!response) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This edit link is invalid",
+        });
+      }
+      assertEditTokenFresh(response);
+
+      const answerRows = await db
+        .select()
+        .from(answersTable)
+        .where(eq(answersTable.responseId, response.id))
+        .execute();
+
+      return {
+        responseId: response.id,
+        answers: Object.fromEntries(
+          answerRows.map((answer) => [answer.fieldId, answer.value]),
+        ),
+        submittedAt: response.submittedAt.toISOString(),
+        editedAt: response.editedAt ? response.editedAt.toISOString() : null,
+      };
+    }),
+
+  /**
+   * Update a response through the respondent's edit token. File and payment
+   * answers reference rows already claimed by the original submission, so they
+   * stay immutable, exactly like the owner-facing response editor.
+   */
+  updateOwnResponse: publicProcedure
+    .input(updateOwnResponseInput)
+    .output(
+      z.object({
+        success: z.boolean(),
+        responseId: z.string().uuid(),
+        editedAt: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ipKey = ctx.ip ?? "unknown";
+      const limited = await rateLimit(`edit:${hashIp(ipKey)}`, {
+        limit: 10,
+        windowMs: 60_000,
+      });
+      if (limited.limited) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many edits, please try again later",
+        });
+      }
+
+      const form = await loadPublishedForm(input.slug);
+      if (form.settings?.allowResponseEditing === false) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Response editing is disabled for this form",
+        });
+      }
+      if (form.settings?.password) {
+        if (!input.password) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This form is password protected",
+          });
+        }
+        if (!(await verifyPassword(input.password, form.settings.password))) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Incorrect password",
+          });
+        }
+      }
+
+      const turnstileOk = await verifyTurnstileToken(
+        input.turnstileToken,
+        ctx.ip ?? undefined,
+      );
+      if (!turnstileOk) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bot verification failed. Please retry.",
+        });
+      }
+
+      const response = await findResponseByEditToken(form.id, input.token);
+      if (!response) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This edit link is invalid",
+        });
+      }
+      assertEditTokenFresh(response);
+
+      const { fields, optionsByField } = await getFieldsForForm(form.id);
+      const validatorFields = fields.map((field) =>
+        toValidatorField(field, optionsByField.get(field.id)),
+      );
+      const knownFieldIds = new Set(validatorFields.map((f) => f.id));
+      const unknownFieldIds = Object.keys(input.answers).filter(
+        (fieldId) => !knownFieldIds.has(fieldId),
+      );
+      if (unknownFieldIds.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Submission contains unknown fields",
+        });
+      }
+
+      const immutable = new Set(["file_upload", "payment", "page_break"]);
+      const editableFieldIds = validatorFields
+        .filter((field) => !immutable.has(field.type))
+        .map((field) => field.id);
+      const editableFieldIdSet = new Set(editableFieldIds);
+
+      const visibleFieldDefs = validatorFields.filter(
+        (field) =>
+          field.type !== "page_break" &&
+          isFieldVisible(field.conditionalLogic, input.answers),
+      );
+      const visibleFieldIds = new Set(visibleFieldDefs.map((f) => f.id));
+      // Immutable answers (files/payments) are replayed from the original
+      // submission and are not part of this validation.
+      const hiddenAnswered = Object.keys(input.answers).filter(
+        (fieldId) =>
+          editableFieldIdSet.has(fieldId) && !visibleFieldIds.has(fieldId),
+      );
+      if (hiddenAnswered.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Answers were submitted for fields that are hidden by the form logic",
+        });
+      }
+      const editableVisibleFieldDefs = visibleFieldDefs.filter(
+        (field) => !immutable.has(field.type),
+      );
+      const editableAnswers = Object.fromEntries(
+        Object.entries(input.answers).filter(([fieldId]) =>
+          visibleFieldIds.has(fieldId),
+        ),
+      );
+
+      const parsed = buildResponseSchema(editableVisibleFieldDefs).safeParse(
+        editableAnswers,
+      );
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map(
+          (issue) => `${issue.path.join(".")}: ${issue.message}`,
+        );
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Invalid submission: ${issues.join("; ")}`,
+        });
+      }
+
+      const editedAt = new Date();
+      await db.transaction(async (tx) => {
+        if (editableFieldIds.length > 0) {
+          await tx
+            .delete(answersTable)
+            .where(
+              and(
+                eq(answersTable.responseId, response.id),
+                inArray(answersTable.fieldId, editableFieldIds),
+              ),
+            )
+            .execute();
+        }
+
+        const rows = Object.entries(parsed.data)
+          .filter(([, value]) => value !== undefined)
+          .map(([fieldId, value]) => ({
+            responseId: response.id,
+            fieldId,
+            value: (value ?? null) as z.infer<typeof AnswerValueSchema> | null,
+          }));
+        if (rows.length > 0) {
+          await tx.insert(answersTable).values(rows).execute();
+        }
+
+        await tx
+          .update(responsesTable)
+          .set({ editedAt })
+          .where(eq(responsesTable.id, response.id))
+          .execute();
+      });
+
+      const finalAnswers = await db
+        .select()
+        .from(answersTable)
+        .where(eq(answersTable.responseId, response.id))
+        .execute();
+
+      void emitResponseUpdated({
+        form,
+        fields: validatorFields,
+        answers: Object.fromEntries(
+          finalAnswers.map((answer) => [answer.fieldId, answer.value]),
+        ),
+        responseId: response.id,
+        submittedAt: response.submittedAt.toISOString(),
+      });
+
+      return {
+        success: true,
+        responseId: response.id,
+        editedAt: editedAt.toISOString(),
+      };
     }),
 
   /** Explore/gallery: list published public forms (paginated, searchable). */

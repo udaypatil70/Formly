@@ -31,6 +31,12 @@ export interface PublicTheme {
 export interface PublicFormSettings {
   thankYouMessage?: string;
   stepMode?: "all" | "page" | "question";
+  allowMultipleResponses?: boolean;
+  allowResponseEditing?: boolean;
+  closeMessage?: string;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  expiry?: string | null;
   startScreen?: {
     enabled?: boolean;
     title?: string;
