@@ -261,8 +261,8 @@ async function blockedState(
 
 /**
  * A draft is bound to the browser that created it. Visitor id is preferred;
- * the IP hash is the fallback for clients that do not send one. Drafts created
- * before binding was added have neither and are allowed to migrate in place.
+ * the IP hash is the fallback for clients that do not send one. Legacy drafts
+ * without either identity cannot be safely claimed and are rejected.
  */
 function draftBelongsToVisitor(
   draft: { ipHash: string | null; visitorId: string | null },
@@ -275,7 +275,7 @@ function draftBelongsToVisitor(
   if (draft.ipHash) {
     return draft.ipHash === ipHash;
   }
-  return true;
+  return false;
 }
 
 /** Loads a response by edit token, scoped to the form. */
