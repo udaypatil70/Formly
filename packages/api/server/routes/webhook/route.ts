@@ -30,6 +30,7 @@ import {
   signatureForStoredBody,
 } from "../../utils/webhook-delivery";
 import { samplePayload } from "../../utils/webhooks";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Webhooks"];
 
@@ -456,6 +457,11 @@ export const webhookRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("webhook-test", ctx.user.id),
+        { limit: 5, windowMs: 60_000 },
+        "Too many webhook test requests, please try again later",
+      );
       const hook = await loadOwnedHook(input.id, ctx.user.id);
       await assertWebhookUrlAllowed(hook.url);
 

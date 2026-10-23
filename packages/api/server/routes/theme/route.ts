@@ -9,6 +9,7 @@ import {
   themeUpdateInput,
 } from "../../utils/schemas";
 import { assertThemeQuota, getUserEntitlements } from "../../utils/plans";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Themes"];
 
@@ -41,6 +42,10 @@ export const themeRouter = router({
     .input(z.undefined())
     .output(z.array(themeOutput))
     .query(async ({ ctx }) => {
+      await enforceRateLimit(
+        rateLimitKey("theme-list", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       const themes = await db
         .select()
         .from(themesTable)
@@ -86,7 +91,11 @@ export const themeRouter = router({
         pageSize: z.number(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("theme-marketplace", ctx.ip ?? "unknown"),
+        { limit: 60, windowMs: 60_000 },
+      );
       const conditions = [
         or(isNull(themesTable.ownerId), eq(themesTable.isPublic, true))!,
       ];
