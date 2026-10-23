@@ -51,9 +51,7 @@ function toDateTimeLocal(value?: string | null): string {
   if (!value) return "";
   const date = new Date(value);
   if (isNaN(date.getTime())) return "";
-  const local = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60_000,
-  );
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
@@ -131,12 +129,7 @@ export function FieldInspectorContent({
     <ScrollArea className="min-h-0 flex-1">
       <div className="flex flex-col gap-5 p-4">
         {field ? (
-          <FieldSettings
-            field={field}
-            fields={fields}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-          />
+          <FieldSettings field={field} fields={fields} onUpdate={onUpdate} onDelete={onDelete} />
         ) : (
           <FormSettings
             fields={fields}
@@ -164,9 +157,7 @@ function FieldSettings({
   onUpdate: (id: string, patch: Partial<BuilderField>) => void;
   onDelete: (id: string) => void;
 }) {
-  const otherFields = fields.filter(
-    (f) => f.id !== field.id && f.type !== "page_break",
-  );
+  const otherFields = fields.filter((f) => f.id !== field.id && f.type !== "page_break");
 
   if (field.type === "page_break") {
     return (
@@ -179,16 +170,12 @@ function FieldSettings({
             onChange={(e) => onUpdate(field.id, { label: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
-            Questions after this divider appear on a new page, with a progress
-            bar and step navigation in the preview.
+            Questions after this divider appear on a new page, with a progress bar and step
+            navigation in the preview.
           </p>
         </div>
         <Separator />
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => onDelete(field.id)}
-        >
+        <Button variant="destructive" size="sm" onClick={() => onDelete(field.id)}>
           <Trash2Icon /> Remove page break
         </Button>
       </>
@@ -205,9 +192,7 @@ function FieldSettings({
   const isFileUpload = field.type === "file_upload";
   const isPayment = field.type === "payment";
   const hasOptions =
-    field.type === "single_select" ||
-    field.type === "multi_select" ||
-    field.type === "radio";
+    field.type === "single_select" || field.type === "multi_select" || field.type === "radio";
 
   const noPlaceholder =
     field.type === "checkbox" ||
@@ -278,39 +263,17 @@ function FieldSettings({
         <Switch
           id="field-required"
           checked={field.required}
-          onCheckedChange={(checked) =>
-            onUpdate(field.id, { required: Boolean(checked) })
-          }
+          onCheckedChange={(checked) => onUpdate(field.id, { required: Boolean(checked) })}
         />
       </div>
 
-      {hasOptions && (
-        <OptionsEditor
-          field={field}
-          onUpdate={onUpdate}
-        />
-      )}
+      {hasOptions && <OptionsEditor field={field} onUpdate={onUpdate} />}
 
-      {(acceptsText || acceptsNumber) && (
-        <ValidationEditor
-          field={field}
-          onUpdate={onUpdate}
-        />
-      )}
+      {(acceptsText || acceptsNumber) && <ValidationEditor field={field} onUpdate={onUpdate} />}
 
-      {isFileUpload && (
-        <FileUploadConfig
-          field={field}
-          onUpdate={onUpdate}
-        />
-      )}
+      {isFileUpload && <FileUploadConfig field={field} onUpdate={onUpdate} />}
 
-      {isPayment && (
-        <PaymentConfig
-          field={field}
-          onUpdate={onUpdate}
-        />
-      )}
+      {isPayment && <PaymentConfig field={field} onUpdate={onUpdate} />}
 
       <ConditionalEditor
         field={field}
@@ -321,11 +284,7 @@ function FieldSettings({
 
       <Separator />
 
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={() => onDelete(field.id)}
-      >
+      <Button variant="destructive" size="sm" onClick={() => onDelete(field.id)}>
         <Trash2Icon /> Delete field
       </Button>
     </>
@@ -347,9 +306,7 @@ function AnswerPipeEditor({
     .slice(0, selfIndex < 0 ? undefined : selfIndex);
 
   const [sourceId, setSourceId] = useState(earlier[0]?.id ?? "");
-  const [target, setTarget] = useState<"label" | "placeholder" | "helpText">(
-    "label",
-  );
+  const [target, setTarget] = useState<"label" | "placeholder" | "helpText">("label");
 
   if (earlier.length === 0) return null;
 
@@ -361,8 +318,8 @@ function AnswerPipeEditor({
       target === "label"
         ? field.label
         : target === "placeholder"
-          ? field.placeholder ?? ""
-          : field.helpText ?? "";
+          ? (field.placeholder ?? "")
+          : (field.helpText ?? "");
     const next = current.trim() ? `${current.trim()} ${token}` : token;
     onUpdate(field.id, { [target]: next } as Partial<BuilderField>);
   };
@@ -398,8 +355,8 @@ function AnswerPipeEditor({
         <PlusIcon /> Insert answer
       </Button>
       <p className="text-xs text-muted-foreground">
-        Fills in the answer from an earlier question when the form is shown.
-        Only questions above this one can be referenced.
+        Fills in the answer from an earlier question when the form is shown. Only questions above
+        this one can be referenced.
       </p>
     </div>
   );
@@ -568,9 +525,7 @@ function FileUploadConfig({
 
   const toggleType = (mime: string) => {
     const current = rules.allowedTypes ?? [];
-    const next = current.includes(mime)
-      ? current.filter((m) => m !== mime)
-      : [...current, mime];
+    const next = current.includes(mime) ? current.filter((m) => m !== mime) : [...current, mime];
     onUpdate(field.id, { validationRules: { ...rules, allowedTypes: next } });
   };
 
@@ -599,8 +554,7 @@ function FileUploadConfig({
             onUpdate(field.id, {
               validationRules: {
                 ...rules,
-                maxSize:
-                  e.target.value === "" ? undefined : Number(e.target.value),
+                maxSize: e.target.value === "" ? undefined : Number(e.target.value),
               },
             })
           }
@@ -631,8 +585,7 @@ function FileUploadConfig({
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          Leave unselected to allow the default set (images, PDFs, spreadsheets,
-          zip).
+          Leave unselected to allow the default set (images, PDFs, spreadsheets, zip).
         </p>
       </div>
     </div>
@@ -653,10 +606,7 @@ function PaymentConfig({
     <div className="flex flex-col gap-3">
       <Label>Payment settings</Label>
       <div className="flex flex-col gap-2">
-        <Label
-          htmlFor="field-payment-amount"
-          className="text-xs text-muted-foreground"
-        >
+        <Label htmlFor="field-payment-amount" className="text-xs text-muted-foreground">
           Amount (whole rupees)
         </Label>
         <Input
@@ -671,7 +621,9 @@ function PaymentConfig({
               validationRules: {
                 ...rules,
                 amount:
-                  e.target.value === "" ? undefined : Math.max(1, Math.round(Number(e.target.value) || 0)),
+                  e.target.value === ""
+                    ? undefined
+                    : Math.max(1, Math.round(Number(e.target.value) || 0)),
                 currency: rules.currency ?? "INR",
               },
             })
@@ -679,10 +631,7 @@ function PaymentConfig({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <Label
-          htmlFor="field-payment-currency"
-          className="text-xs text-muted-foreground"
-        >
+        <Label htmlFor="field-payment-currency" className="text-xs text-muted-foreground">
           Currency
         </Label>
         <Select
@@ -702,8 +651,7 @@ function PaymentConfig({
         </Select>
       </div>
       <p className="text-xs text-muted-foreground">
-        Collect a payment from every respondent through Razorpay before their
-        response is submitted.
+        Collect a payment from every respondent through Razorpay before their response is submitted.
       </p>
     </div>
   );
@@ -770,12 +718,7 @@ function ConditionalEditor({
       all: boolean;
       conditions: {
         fieldId: string;
-        operator:
-          | "equals"
-          | "not_equals"
-          | "contains"
-          | "greater_than"
-          | "less_than";
+        operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
         value: string | number | boolean;
       }[];
     }>,
@@ -793,12 +736,7 @@ function ConditionalEditor({
     index: number,
     patch: Partial<{
       fieldId: string;
-      operator:
-        | "equals"
-        | "not_equals"
-        | "contains"
-        | "greater_than"
-        | "less_than";
+      operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
       value: string | number | boolean;
     }>,
   ) => {
@@ -871,11 +809,7 @@ function ConditionalEditor({
   };
 
   const jumpValue =
-    logic?.gotoSubmit === true
-      ? "submit"
-      : logic?.gotoPageId
-        ? logic.gotoPageId
-        : "none";
+    logic?.gotoSubmit === true ? "submit" : logic?.gotoPageId ? logic.gotoPageId : "none";
 
   return (
     <div className="flex flex-col gap-3">
@@ -893,10 +827,7 @@ function ConditionalEditor({
       {enabled && otherFields.length > 0 && (
         <div className="flex flex-col gap-3">
           {groups.map((group) => (
-            <div
-              key={group.id}
-              className="flex flex-col gap-2 rounded-md border p-3"
-            >
+            <div key={group.id} className="flex flex-col gap-2 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs">
                   <button
@@ -941,9 +872,7 @@ function ConditionalEditor({
                     <div className="flex items-center gap-1.5">
                       <Select
                         value={condition.fieldId}
-                        onValueChange={(v) =>
-                          updateCondition(group.id, index, { fieldId: v })
-                        }
+                        onValueChange={(v) => updateCondition(group.id, index, { fieldId: v })}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Field" />
@@ -961,9 +890,7 @@ function ConditionalEditor({
                         size="icon-sm"
                         onClick={() =>
                           updateGroup(group.id, {
-                            conditions: group.conditions.filter(
-                              (_, i) => i !== index,
-                            ),
+                            conditions: group.conditions.filter((_, i) => i !== index),
                           })
                         }
                         aria-label="Remove condition"
@@ -992,9 +919,7 @@ function ConditionalEditor({
                           {["equals", "not_equals", "contains", "greater_than", "less_than"].map(
                             (op) => (
                               <SelectItem key={op} value={op}>
-                                <span className="capitalize">
-                                  {op.replace("_", " ")}
-                                </span>
+                                <span className="capitalize">{op.replace("_", " ")}</span>
                               </SelectItem>
                             ),
                           )}
@@ -1010,12 +935,7 @@ function ConditionalEditor({
                             condition.operator === "greater_than" ||
                             condition.operator === "less_than";
                           updateCondition(group.id, index, {
-                            value:
-                              raw === ""
-                                ? ""
-                                : Number.isFinite(num) && isCompare
-                                  ? num
-                                  : raw,
+                            value: raw === "" ? "" : Number.isFinite(num) && isCompare ? num : raw,
                           });
                         }}
                       />
@@ -1024,11 +944,7 @@ function ConditionalEditor({
                 ))}
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => addCondition(group.id)}
-              >
+              <Button variant="outline" size="sm" onClick={() => addCondition(group.id)}>
                 <PlusIcon /> Add condition
               </Button>
             </div>
@@ -1065,8 +981,8 @@ function ConditionalEditor({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Jump straight to a section (page break) or end the form when this
-              field gets an answer.
+              Jump straight to a section (page break) or end the form when this field gets an
+              answer.
             </p>
           </div>
         </>
@@ -1229,7 +1145,7 @@ function FormSettings({
   const [passwordDraft, setPasswordDraft] = useState("");
   const [slugDraft, setSlugDraft] = useState(meta.slug);
   const [domainDraft, setDomainDraft] = useState(meta.customDomain ?? "");
-  const hasPassword = Boolean(settings.password);
+  const hasPassword = settings.hasPassword ?? Boolean(settings.password);
   const emailFields = fields.filter((f) => f.type === "email");
 
   useEffect(() => {
@@ -1264,9 +1180,9 @@ function FormSettings({
   const isCurrentDomain = debouncedDomain === (meta.customDomain ?? "");
   const domainHint = isCurrentDomain
     ? null
-    : (domainCheck.data?.available
-        ? `${debouncedDomain} is available`
-        : (domainCheck.data?.reason ?? domainCheck.error?.message ?? null));
+    : domainCheck.data?.available
+      ? `${debouncedDomain} is available`
+      : (domainCheck.data?.reason ?? domainCheck.error?.message ?? null);
 
   // Committed on blur, like the slug: saving on every keystroke would throw away
   // the proof of control on each intermediate value.
@@ -1304,8 +1220,7 @@ function FormSettings({
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Lowercase letters, numbers and hyphens. Changing it breaks any old
-          shared links.
+          Lowercase letters, numbers and hyphens. Changing it breaks any old shared links.
         </p>
       </div>
 
@@ -1321,19 +1236,15 @@ function FormSettings({
             onBlur={commitDomain}
           />
         </div>
-        {domainHint ? (
-          <p className="text-xs text-muted-foreground">{domainHint}</p>
-        ) : null}
+        {domainHint ? <p className="text-xs text-muted-foreground">{domainHint}</p> : null}
         <p className="text-xs text-muted-foreground">
-          Serve this form at your own domain with no /form/ path. You&apos;ll
-          need to prove you control it before it goes live.
+          Serve this form at your own domain with no /form/ path. You&apos;ll need to prove you
+          control it before it goes live.
         </p>
         <DomainVerification
           formId={meta.id}
           domain={meta.customDomain ?? null}
-          onReleased={() =>
-            onUpdateMeta({ customDomain: null, customDomainStatus: "pending" })
-          }
+          onReleased={() => onUpdateMeta({ customDomain: null, customDomainStatus: "pending" })}
         />
       </div>
 
@@ -1361,9 +1272,7 @@ function FormSettings({
           rows={2}
           value={settings.thankYouMessage ?? ""}
           placeholder="Shown after someone submits this form"
-          onChange={(e) =>
-            onSettingsChange({ thankYouMessage: e.target.value })
-          }
+          onChange={(e) => onSettingsChange({ thankYouMessage: e.target.value })}
         />
       </div>
 
@@ -1452,8 +1361,7 @@ function FormSettings({
             <div className="flex flex-col gap-1">
               <Label htmlFor="form-end-enabled">Custom end screen</Label>
               <p className="text-xs text-muted-foreground">
-                Shown after submission. When off, the default thank-you screen
-                is used.
+                Shown after submission. When off, the default thank-you screen is used.
               </p>
             </div>
             <Switch
@@ -1540,9 +1448,7 @@ function FormSettings({
           <Switch
             id="form-notify"
             checked={settings.notifyOnResponse !== false}
-            onCheckedChange={(checked) =>
-              onSettingsChange({ notifyOnResponse: checked })
-            }
+            onCheckedChange={(checked) => onSettingsChange({ notifyOnResponse: checked })}
           />
         </div>
 
@@ -1553,9 +1459,7 @@ function FormSettings({
             type="email"
             placeholder="you@example.com"
             value={settings.notificationEmail ?? ""}
-            onChange={(e) =>
-              onSettingsChange({ notificationEmail: e.target.value })
-            }
+            onChange={(e) => onSettingsChange({ notificationEmail: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
             Leave blank to use the email address of your account.
@@ -1572,9 +1476,7 @@ function FormSettings({
           <Switch
             id="form-confirm"
             checked={settings.sendConfirmation === true}
-            onCheckedChange={(checked) =>
-              onSettingsChange({ sendConfirmation: checked })
-            }
+            onCheckedChange={(checked) => onSettingsChange({ sendConfirmation: checked })}
           />
         </div>
 
@@ -1607,8 +1509,7 @@ function FormSettings({
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Add an Email field to your form to choose where confirmations are
-              sent.
+              Add an Email field to your form to choose where confirmations are sent.
             </p>
           )
         ) : null}
@@ -1661,9 +1562,7 @@ function FormSettings({
               <RadioGroupItem value={option.value} className="mt-0.5" />
               <span className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">{option.title}</span>
-                <span className="text-muted-foreground text-xs">
-                  {option.hint}
-                </span>
+                <span className="text-muted-foreground text-xs">{option.hint}</span>
               </span>
             </Label>
           ))}
@@ -1674,19 +1573,14 @@ function FormSettings({
         <Label htmlFor="form-password">Password protection</Label>
         {hasPassword ? (
           <p className="text-muted-foreground text-xs">
-            A password is currently set. Visitors must enter it before opening
-            the form.
+            A password is currently set. Visitors must enter it before opening the form.
           </p>
         ) : null}
         <div className="flex items-center gap-2">
           <Input
             id="form-password"
             type="password"
-            placeholder={
-              hasPassword
-                ? "Leave blank to keep current password"
-                : "No password set"
-            }
+            placeholder={hasPassword ? "Leave blank to keep current password" : "No password set"}
             value={passwordDraft}
             onChange={(e) => setPasswordDraft(e.target.value)}
           />
@@ -1696,7 +1590,7 @@ function FormSettings({
               size="sm"
               type="button"
               onClick={() => {
-                onSettingsChange({ password: undefined });
+                onSettingsChange({ password: null });
                 setPasswordDraft("");
               }}
             >
@@ -1718,131 +1612,113 @@ function FormSettings({
         ) : null}
       </div>
 
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-opens-at">Opens at</Label>
+        <Input
+          id="form-opens-at"
+          type="datetime-local"
+          value={toDateTimeLocal(settings.opensAt)}
+          onChange={(e) =>
+            onSettingsChange({
+              opensAt: fromDateTimeLocal(e.target.value),
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Responses are not accepted before this time.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-closes-at">Closes at</Label>
+        <Input
+          id="form-closes-at"
+          type="datetime-local"
+          value={toDateTimeLocal(settings.closesAt ?? settings.expiry)}
+          min={toDateTimeLocal(settings.opensAt) || undefined}
+          onChange={(e) =>
+            onSettingsChange({
+              closesAt: fromDateTimeLocal(e.target.value),
+              expiry: null,
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">Responses are not accepted after this time.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="form-opens-at">Opens at</Label>
+          <Label htmlFor="form-response-target">Response target</Label>
           <Input
-            id="form-opens-at"
-            type="datetime-local"
-            value={toDateTimeLocal(settings.opensAt)}
+            id="form-response-target"
+            type="number"
+            min={1}
+            placeholder="None"
+            value={settings.responseTarget ?? ""}
             onChange={(e) =>
               onSettingsChange({
-                opensAt: fromDateTimeLocal(e.target.value),
+                responseTarget: e.target.value === "" ? null : Number(e.target.value),
               })
             }
           />
-          <p className="text-xs text-muted-foreground">
-            Responses are not accepted before this time.
-          </p>
+          <p className="text-xs text-muted-foreground">Stops accepting responses at this count.</p>
         </div>
-
         <div className="flex flex-col gap-2">
-          <Label htmlFor="form-closes-at">Closes at</Label>
+          <Label htmlFor="form-response-limit">Hard limit</Label>
           <Input
-            id="form-closes-at"
-            type="datetime-local"
-            value={toDateTimeLocal(settings.closesAt ?? settings.expiry)}
-            min={toDateTimeLocal(settings.opensAt) || undefined}
+            id="form-response-limit"
+            type="number"
+            min={1}
+            placeholder="None"
+            value={settings.responseLimit ?? ""}
             onChange={(e) =>
               onSettingsChange({
-                closesAt: fromDateTimeLocal(e.target.value),
-                expiry: null,
+                responseLimit: e.target.value === "" ? null : Number(e.target.value),
               })
             }
           />
-          <p className="text-xs text-muted-foreground">
-            Responses are not accepted after this time.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="form-response-target">Response target</Label>
-            <Input
-              id="form-response-target"
-              type="number"
-              min={1}
-              placeholder="None"
-              value={settings.responseTarget ?? ""}
-              onChange={(e) =>
-                onSettingsChange({
-                  responseTarget:
-                    e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              Stops accepting responses at this count.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="form-response-limit">Hard limit</Label>
-            <Input
-              id="form-response-limit"
-              type="number"
-              min={1}
-              placeholder="None"
-              value={settings.responseLimit ?? ""}
-              onChange={(e) =>
-                onSettingsChange({
-                  responseLimit:
-                    e.target.value === "" ? null : Number(e.target.value),
-                })
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              Absolute maximum number of responses.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="form-close-message">Closed message</Label>
-          <Textarea
-            id="form-close-message"
-            rows={3}
-            value={settings.closeMessage ?? ""}
-            placeholder="Shown when the form is closed, full, or not open yet"
-            onChange={(e) =>
-              onSettingsChange({ closeMessage: e.target.value })
-            }
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="form-multiple-responses">
-              Allow multiple responses
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Let the same visitor submit more than once.
-            </p>
-          </div>
-          <Switch
-            id="form-multiple-responses"
-            checked={settings.allowMultipleResponses === true}
-            onCheckedChange={(checked) =>
-              onSettingsChange({ allowMultipleResponses: checked })
-            }
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="form-response-editing">
-              Allow response editing
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Respondents can reopen their submission with an edit link.
-            </p>
-          </div>
-          <Switch
-            id="form-response-editing"
-            checked={settings.allowResponseEditing !== false}
-            onCheckedChange={(checked) =>
-              onSettingsChange({ allowResponseEditing: checked })
-            }
-          />
+          <p className="text-xs text-muted-foreground">Absolute maximum number of responses.</p>
         </div>
       </div>
-    );
-  }
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="form-close-message">Closed message</Label>
+        <Textarea
+          id="form-close-message"
+          rows={3}
+          value={settings.closeMessage ?? ""}
+          placeholder="Shown when the form is closed, full, or not open yet"
+          onChange={(e) => onSettingsChange({ closeMessage: e.target.value })}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="form-multiple-responses">Allow multiple responses</Label>
+          <p className="text-xs text-muted-foreground">
+            Let the same visitor submit more than once.
+          </p>
+        </div>
+        <Switch
+          id="form-multiple-responses"
+          checked={settings.allowMultipleResponses === true}
+          onCheckedChange={(checked) => onSettingsChange({ allowMultipleResponses: checked })}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="form-response-editing">Allow response editing</Label>
+          <p className="text-xs text-muted-foreground">
+            Respondents can reopen their submission with an edit link.
+          </p>
+        </div>
+        <Switch
+          id="form-response-editing"
+          checked={settings.allowResponseEditing !== false}
+          onCheckedChange={(checked) => onSettingsChange({ allowResponseEditing: checked })}
+        />
+      </div>
+    </div>
+  );
+}

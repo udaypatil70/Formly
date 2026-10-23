@@ -36,12 +36,7 @@ export const ValidationRulesSchema = z
     allowedTypes: z.array(z.string().max(50)).max(20).optional(),
     minLabel: z.string().max(100).optional(),
     maxLabel: z.string().max(100).optional(),
-    amount: z
-      .number()
-      .int()
-      .positive()
-      .describe("Payment amount in whole rupees")
-      .optional(),
+    amount: z.number().int().positive().describe("Payment amount in whole rupees").optional(),
     currency: z
       .string()
       .length(3)
@@ -55,13 +50,7 @@ export type ValidationRules = z.infer<typeof ValidationRulesSchema>;
 
 export const ConditionalRuleSchema = z.object({
   fieldId: z.string().uuid(),
-  operator: z.enum([
-    "equals",
-    "not_equals",
-    "contains",
-    "greater_than",
-    "less_than",
-  ]),
+  operator: z.enum(["equals", "not_equals", "contains", "greater_than", "less_than"]),
   value: z.union([z.string(), z.number(), z.boolean()]),
 });
 export type ConditionalRule = z.infer<typeof ConditionalRuleSchema>;
@@ -237,10 +226,7 @@ export const FormSchema = z.object({
     .string()
     .min(1)
     .max(255)
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Slug must be lowercase alphanumeric with hyphens",
-    ),
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase alphanumeric with hyphens"),
   status: z.enum(["draft", "published", "unpublished"]),
   visibility: z.enum(["public", "unlisted"]),
   archived: z.boolean().default(false),
@@ -248,6 +234,7 @@ export const FormSchema = z.object({
   settings: z
     .object({
       password: z.string().optional(),
+      hasPassword: z.boolean().optional(),
       expiry: z.string().nullish(),
       opensAt: z.string().nullish(),
       closesAt: z.string().nullish(),
@@ -320,18 +307,10 @@ export const CreateFormInput = z.object({
     .string()
     .min(1)
     .max(255)
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Slug must be lowercase alphanumeric with hyphens",
-    ),
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase alphanumeric with hyphens"),
   visibility: z.enum(["public", "unlisted"]).default("public"),
   themeId: z.string().uuid().optional(),
-  customDomain: z
-    .string()
-    .trim()
-    .max(255)
-    .nullable()
-    .optional(),
+  customDomain: z.string().trim().max(255).nullable().optional(),
   settings: z
     .object({
       password: z.string().min(1).optional(),
@@ -371,7 +350,12 @@ export const CreateFormInput = z.object({
 });
 export type CreateFormInput = z.infer<typeof CreateFormInput>;
 
-export const UpdateFormInput = CreateFormInput.partial();
+export const UpdateFormInput = CreateFormInput.partial().extend({
+  settings: CreateFormInput.shape.settings
+    .unwrap()
+    .extend({ password: z.string().min(1).nullable().optional() })
+    .optional(),
+});
 export type UpdateFormInput = z.infer<typeof UpdateFormInput>;
 
 export const PublishFormInput = z.object({
@@ -426,15 +410,7 @@ const ZERO_DECIMAL_CURRENCIES = new Set([
   "XPF",
 ]);
 
-const THREE_DECIMAL_CURRENCIES = new Set([
-  "BHD",
-  "IQD",
-  "JOD",
-  "KWD",
-  "LYD",
-  "OMR",
-  "TND",
-]);
+const THREE_DECIMAL_CURRENCIES = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]);
 
 /** How many minor units make one whole unit of `currency`. */
 export function currencyMinorUnitFactor(currency: string): number {
@@ -481,9 +457,7 @@ const CATASTROPHIC_PATTERN =
  * Compiles an owner-supplied pattern, returning undefined when it is unsafe or
  * malformed. Callers fall back to a plain string check.
  */
-function compileSafePattern(
-  pattern: string,
-): RegExp | undefined {
+function compileSafePattern(pattern: string): RegExp | undefined {
   if (pattern.length > 200) return undefined;
   if (CATASTROPHIC_PATTERN.test(pattern)) return undefined;
   try {
@@ -530,10 +504,8 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
 
     case "number": {
       let n = z.coerce.number();
-      if (field.validationRules?.min !== undefined)
-        n = n.min(field.validationRules.min);
-      if (field.validationRules?.max !== undefined)
-        n = n.max(field.validationRules.max);
+      if (field.validationRules?.min !== undefined) n = n.min(field.validationRules.min);
+      if (field.validationRules?.max !== undefined) n = n.max(field.validationRules.max);
       validator = n;
       break;
     }
@@ -542,9 +514,7 @@ function buildFieldValidator(field: Field): z.ZodTypeAny {
     case "radio": {
       const values = field.options?.map((o: FieldOption) => o.value);
       validator =
-        values && values.length > 0
-          ? z.enum(values as [string, ...string[]])
-          : z.string();
+        values && values.length > 0 ? z.enum(values as [string, ...string[]]) : z.string();
       break;
     }
 
@@ -741,10 +711,7 @@ export function isWildcardEvent(events: readonly string[] | null | undefined) {
 }
 
 /** Whether a hook subscribed to `events` should fire for `event`. */
-export function webhookSubscribesTo(
-  events: readonly string[] | null | undefined,
-  event: string,
-) {
+export function webhookSubscribesTo(events: readonly string[] | null | undefined, event: string) {
   if (!Array.isArray(events) || events.length === 0) {
     // A hook with no stored selection defaults to the original single-event
     // behaviour rather than silently receiving nothing.

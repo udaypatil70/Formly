@@ -43,7 +43,11 @@ export const themeColorInput = z.object({
 
 export const themeBackgroundInput = z.discriminatedUnion("type", [
   z.object({ type: z.literal("solid"), color: z.string().min(1).max(50) }),
-  z.object({ type: z.literal("gradient"), from: z.string().min(1).max(50), to: z.string().min(1).max(50) }),
+  z.object({
+    type: z.literal("gradient"),
+    from: z.string().min(1).max(50),
+    to: z.string().min(1).max(50),
+  }),
   z.object({ type: z.literal("image"), url: z.string().min(1).max(500) }),
 ]);
 
@@ -95,17 +99,18 @@ export const formMetaOutput = z.object({
   customDomainStatus: z.enum(["pending", "verified", "failed"]).optional(),
   customDomainVerifiedAt: z.string().nullable().optional(),
   settings: z
-      .object({
-        password: z.string().optional(),
-        expiry: z.string().nullable().optional(),
-        opensAt: z.string().nullable().optional(),
-        closesAt: z.string().nullable().optional(),
-        responseTarget: z.number().int().positive().nullable().optional(),
-        responseLimit: z.number().int().positive().nullable().optional(),
-        closeMessage: z.string().max(2000).nullable().optional(),
-        allowMultipleResponses: z.boolean().optional(),
-        allowResponseEditing: z.boolean().optional(),
-        thankYouMessage: z.string().max(2000).optional(),
+    .object({
+      password: z.string().optional(),
+      hasPassword: z.boolean().optional(),
+      expiry: z.string().nullable().optional(),
+      opensAt: z.string().nullable().optional(),
+      closesAt: z.string().nullable().optional(),
+      responseTarget: z.number().int().positive().nullable().optional(),
+      responseLimit: z.number().int().positive().nullable().optional(),
+      closeMessage: z.string().max(2000).nullable().optional(),
+      allowMultipleResponses: z.boolean().optional(),
+      allowResponseEditing: z.boolean().optional(),
+      thankYouMessage: z.string().max(2000).optional(),
       stepMode: z.enum(["all", "page", "question"]).optional(),
       notifyOnResponse: z.boolean().optional(),
       notificationEmail: z.string().optional(),

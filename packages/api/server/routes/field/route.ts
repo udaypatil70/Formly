@@ -1,24 +1,13 @@
 import { z } from "zod";
 import { db, eq } from "@repo/db";
-import {
-  fieldOptionsTable,
-  fieldsTable,
-  formsTable,
-} from "@repo/db/schema";
+import { fieldOptionsTable, fieldsTable, formsTable } from "@repo/db/schema";
 import { TRPCError } from "@trpc/server";
-import {
-  CreateFieldInput,
-  UpdateFieldInput,
-} from "@repo/validators";
+import { CreateFieldInput, UpdateFieldInput } from "@repo/validators";
 import { router, protectedProcedure } from "../../trpc";
 import { getFormBy } from "../../utils/form";
 import { assertFormOwner } from "../form/route";
 import { fieldOutput } from "../../utils/schemas";
-import {
-  getUserEntitlements,
-  hasConditionalLogic,
-  planAllowsFeature,
-} from "../../utils/plans";
+import { getUserEntitlements, hasConditionalLogic, planAllowsFeature } from "../../utils/plans";
 
 const TAGS = ["Fields"];
 
@@ -28,8 +17,7 @@ async function assertLogicAllowed(userId: string) {
   if (!planAllowsFeature(entitlements, "multiPageAndLogic")) {
     throw new TRPCError({
       code: "PAYMENT_REQUIRED",
-      message:
-        "Conditional logic is not included in your plan.",
+      message: "Conditional logic is not included in your plan.",
     });
   }
 }
@@ -142,12 +130,8 @@ export const fieldRouter = router({
           .set({
             type: input.type ?? fieldRow.type,
             label: input.label ?? fieldRow.label,
-            placeholder:
-              input.placeholder !== undefined
-                ? input.placeholder
-                : fieldRow.placeholder,
-            helpText:
-              input.helpText !== undefined ? input.helpText : fieldRow.helpText,
+            placeholder: input.placeholder !== undefined ? input.placeholder : fieldRow.placeholder,
+            helpText: input.helpText !== undefined ? input.helpText : fieldRow.helpText,
             required: input.required ?? fieldRow.required,
             order: input.order ?? fieldRow.order,
             validationRules:
@@ -225,7 +209,31 @@ export const fieldRouter = router({
     .input(reorderInput)
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      const form = await assertFormOwner(input.formId, ctx.user.id);
+      await assertFormOwner(input.formId, ctx.user.id);
+
+      const uniqueIds = new Set(input.orderedIds);
+      if (uniqueIds.size !== input.orderedIds.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A field can only appear once in the order",
+        });
+      }
+
+      const formFields = await db
+        .select({ id: fieldsTable.id })
+        .from(fieldsTable)
+        .where(eq(fieldsTable.formId, input.formId))
+        .execute();
+      const formFieldIds = new Set(formFields.map((field) => field.id));
+      if (
+        input.orderedIds.some((id) => !formFieldIds.has(id)) ||
+        input.orderedIds.length !== formFields.length
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The ordered fields must exactly match this form's fields",
+        });
+      }
 
       await db.transaction(async (tx) => {
         for (let index = 0; index < input.orderedIds.length; index++) {

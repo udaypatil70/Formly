@@ -1,4 +1,4 @@
-import { db, eq, inArray, sql, type SQL } from "@repo/db";
+import { db, eq, inArray, type SQL } from "@repo/db";
 import {
   fieldOptionsTable,
   fieldsTable,
@@ -18,10 +18,7 @@ export type { SelectForm, SelectTheme };
  * Converts a DB field row + its options into the validator `Field` shape
  * expected by `buildResponseSchema`. Strips empty default JSON objects.
  */
-export function toValidatorField(
-  field: SelectField,
-  rawOptions: SelectFieldOption[] = [],
-): Field {
+export function toValidatorField(field: SelectField, rawOptions: SelectFieldOption[] = []): Field {
   const options: FieldOption[] = rawOptions.map((o) => o);
 
   const hasKeys = (obj: unknown): obj is Record<string, unknown> =>
@@ -36,12 +33,8 @@ export function toValidatorField(
     helpText: field.helpText ?? undefined,
     required: field.required,
     order: field.order,
-    validationRules: hasKeys(field.validationRules)
-      ? field.validationRules
-      : undefined,
-    conditionalLogic: hasKeys(field.conditionalLogic)
-      ? field.conditionalLogic
-      : undefined,
+    validationRules: hasKeys(field.validationRules) ? field.validationRules : undefined,
+    conditionalLogic: hasKeys(field.conditionalLogic) ? field.conditionalLogic : undefined,
     options: options.length > 0 ? options : undefined,
   };
 }
@@ -60,7 +53,12 @@ export async function getFieldsForForm(formId: string) {
   const options = await db
     .select()
     .from(fieldOptionsTable)
-    .where(inArray(fieldOptionsTable.fieldId, fields.map((f) => f.id)))
+    .where(
+      inArray(
+        fieldOptionsTable.fieldId,
+        fields.map((f) => f.id),
+      ),
+    )
     .orderBy(fieldOptionsTable.order);
 
   const optionsByField = new Map<string, SelectFieldOption[]>();
@@ -75,15 +73,11 @@ export async function getFieldsForForm(formId: string) {
 
 export async function getValidatorFields(formId: string): Promise<Field[]> {
   const { fields, optionsByField } = await getFieldsForForm(formId);
-  return fields.map((field) =>
-    toValidatorField(field, optionsByField.get(field.id)),
-  );
+  return fields.map((field) => toValidatorField(field, optionsByField.get(field.id)));
 }
 
 /** Fetch a single form row by a where condition (e.g. eq(formsTable.id|slug)). */
-export async function getFormBy(
-  condition: SQL,
-): Promise<SelectForm> {
+export async function getFormBy(condition: SQL): Promise<SelectForm> {
   const rows = await db.select().from(formsTable).where(condition).limit(1);
   if (rows.length === 0) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Form not found" });
@@ -94,11 +88,7 @@ export async function getFormBy(
 /** Fetch a form's theme if set. */
 export async function getTheme(themeId: string | null): Promise<SelectTheme | null> {
   if (!themeId) return null;
-  const themes = await db
-    .select()
-    .from(themesTable)
-    .where(eq(themesTable.id, themeId))
-    .limit(1);
+  const themes = await db.select().from(themesTable).where(eq(themesTable.id, themeId)).limit(1);
   return themes[0] ?? null;
 }
 
@@ -111,15 +101,4 @@ export function normalizeDomain(input: string): string {
   d = d.replace(/:\d+$/, "");
   d = d.replace(/^www\./, "");
   return d;
-}
-
-/**
- * Loads a form with its validator fields + theme in one shot.
- * Used by the public renderer and the builder editor.
- */
-export async function getFormWithEverything(condition: SQL) {
-  const form = await getFormBy(condition);
-  const fields = await getValidatorFields(form.id);
-  const theme = await getTheme(form.themeId);
-  return { form, fields, theme };
 }

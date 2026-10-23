@@ -25,7 +25,13 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
-import { billingCaption, usePlanCatalogue, type Billing } from "~/lib/plans";
+import {
+  BILLING_OPTIONS,
+  YEARLY_DISCOUNT_LABEL,
+  billingCaption,
+  usePlanCatalogue,
+  type Billing,
+} from "~/lib/plans";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
 import { trpc } from "~/trpc/client";
@@ -59,9 +65,7 @@ function SectionHeading({
       >
         {eyebrow}
       </Badge>
-      <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-        {title}
-      </h2>
+      <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
       {description && (
         <p className="text-muted-foreground mt-4 text-base leading-relaxed sm:text-lg">
           {description}
@@ -211,9 +215,8 @@ export function LandingPage() {
               </span>
             </h1>
             <p className="text-muted-foreground mx-auto mt-6 max-w-2xl text-base leading-relaxed sm:text-lg">
-              Formly is the form builder for people who care about design. Drag,
-              drop, branch, analyze — and ship a response-ready form before your
-              coffee goes cold.
+              Formly is the form builder for people who care about design. Drag, drop, branch,
+              analyze — and ship a response-ready form before your coffee goes cold.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button
@@ -279,9 +282,7 @@ export function LandingPage() {
                         <span className="bg-white/[0.05] text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded text-[10px]">
                           {field.n}
                         </span>
-                        <span className="flex-1 truncate text-xs font-medium">
-                          {field.name}
-                        </span>
+                        <span className="flex-1 truncate text-xs font-medium">{field.name}</span>
                         <span className="text-muted-foreground shrink-0 rounded-full border border-border/60 bg-white/[0.03] px-2 py-0.5 text-[10px]">
                           {field.type}
                         </span>
@@ -338,15 +339,11 @@ export function LandingPage() {
                             <StarIcon fill="currentColor" />
                           </span>
                         ))}
-                        <span className="text-foreground/50 ml-1 text-xs">
-                          4/5
-                        </span>
+                        <span className="text-foreground/50 ml-1 text-xs">4/5</span>
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <div className="text-xs font-medium">
-                        How did you hear about us?
-                      </div>
+                      <div className="text-xs font-medium">How did you hear about us?</div>
                       <div className="space-y-1.5">
                         {[
                           { label: "Twitter / X", selected: true },
@@ -388,13 +385,9 @@ export function LandingPage() {
                     <div className="flex items-end justify-between">
                       <div>
                         <div className="text-2xl font-semibold">127</div>
-                        <div className="text-muted-foreground text-xs">
-                          Total responses
-                        </div>
+                        <div className="text-muted-foreground text-xs">Total responses</div>
                       </div>
-                      <span className="text-emerald-400 text-xs font-medium">
-                        +12 today
-                      </span>
+                      <span className="text-emerald-400 text-xs font-medium">+12 today</span>
                     </div>
                     <div className="mt-3 flex h-12 items-end gap-1">
                       {[6, 9, 5, 11, 8, 10, 12].map((height, index) => (
@@ -405,14 +398,27 @@ export function LandingPage() {
                         />
                       ))}
                     </div>
-                    <div className="text-muted-foreground mt-1 text-[10px]">
-                      Last 7 days
-                    </div>
+                    <div className="text-muted-foreground mt-1 text-[10px]">Last 7 days</div>
                     <div className="mt-4 space-y-2">
                       {[
-                        { initials: "S", name: "Sarah C.", time: "just now", className: "bg-violet-500/20 text-violet-300" },
-                        { initials: "J", name: "James R.", time: "3m ago", className: "bg-amber-500/20 text-amber-300" },
-                        { initials: "P", name: "Priya N.", time: "8m ago", className: "bg-emerald-500/20 text-emerald-300" },
+                        {
+                          initials: "S",
+                          name: "Sarah C.",
+                          time: "just now",
+                          className: "bg-violet-500/20 text-violet-300",
+                        },
+                        {
+                          initials: "J",
+                          name: "James R.",
+                          time: "3m ago",
+                          className: "bg-amber-500/20 text-amber-300",
+                        },
+                        {
+                          initials: "P",
+                          name: "Priya N.",
+                          time: "8m ago",
+                          className: "bg-emerald-500/20 text-emerald-300",
+                        },
                       ].map((person) => (
                         <div key={person.name} className="flex items-center gap-2.5">
                           <span
@@ -424,12 +430,8 @@ export function LandingPage() {
                             {person.initials}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-xs font-medium">
-                              {person.name}
-                            </div>
-                            <div className="text-muted-foreground text-[10px]">
-                              {person.time}
-                            </div>
+                            <div className="truncate text-xs font-medium">{person.name}</div>
+                            <div className="text-muted-foreground text-[10px]">{person.time}</div>
                           </div>
                         </div>
                       ))}
@@ -457,10 +459,7 @@ export function LandingPage() {
         <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-8 px-4 py-10 text-center sm:px-6 lg:grid-cols-4 lg:px-8">
           {[
             {
-              value:
-                themeCatalogue.data === undefined
-                  ? "—"
-                  : String(themeCatalogue.data.total),
+              value: themeCatalogue.data === undefined ? "—" : String(themeCatalogue.data.total),
               label: "Curated and community themes",
             },
             { value: "SAML", label: "Enterprise sign-in" },
@@ -568,18 +567,14 @@ export function LandingPage() {
                     <StarIcon key={index} className="size-4" fill="currentColor" />
                   ))}
                 </div>
-                <p className="mt-4 text-sm leading-relaxed">
-                  &ldquo;{testimonial.quote}&rdquo;
-                </p>
+                <p className="mt-4 text-sm leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
                 <div className="mt-5 flex items-center gap-3 border-t border-border/60 pt-4">
                   <span className="bg-violet-500/20 flex size-10 items-center justify-center rounded-full text-sm font-semibold text-violet-300">
                     {testimonial.initials}
                   </span>
                   <div>
                     <div className="text-sm font-medium">{testimonial.name}</div>
-                    <div className="text-muted-foreground text-xs">
-                      {testimonial.role}
-                    </div>
+                    <div className="text-muted-foreground text-xs">{testimonial.role}</div>
                   </div>
                 </div>
               </Card>
@@ -605,7 +600,7 @@ export function LandingPage() {
           />
 
           <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border/60 bg-white/[0.03] p-1">
-            {(["monthly", "yearly"] as const).map((option) => (
+            {BILLING_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -625,7 +620,7 @@ export function LandingPage() {
                       billing === option ? "text-white/80" : "text-emerald-400",
                     )}
                   >
-                    −20%
+                    {YEARLY_DISCOUNT_LABEL}
                   </span>
                 )}
               </button>
@@ -660,17 +655,11 @@ export function LandingPage() {
                     <tier.icon />
                   </span>
                   <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
-                  <p className="text-muted-foreground text-sm">
-                    {tier.tagline}
-                  </p>
+                  <p className="text-muted-foreground text-sm">{tier.tagline}</p>
                   <div className="mt-5 flex items-baseline gap-1">
-                    <span className="text-4xl font-semibold tracking-tight">
-                      {tier.priceLabel}
-                    </span>
+                    <span className="text-4xl font-semibold tracking-tight">{tier.priceLabel}</span>
                     {tier.priceLabel !== "Custom" && (
-                      <span className="text-muted-foreground text-sm">
-                        / month
-                      </span>
+                      <span className="text-muted-foreground text-sm">/ month</span>
                     )}
                   </div>
                   <p className="text-muted-foreground mt-1 h-4 text-xs">
@@ -694,10 +683,7 @@ export function LandingPage() {
                   </Button>
                   <ul className="mt-7 space-y-3">
                     {tier.features.map((feature) => (
-                      <li
-                        key={feature}
-                        className="flex items-start gap-2.5 text-sm"
-                      >
+                      <li key={feature} className="flex items-start gap-2.5 text-sm">
                         <CheckIcon className="text-emerald-400 mt-0.5 size-4 shrink-0" />
                         <span className="text-muted-foreground">{feature}</span>
                       </li>
@@ -731,8 +717,8 @@ export function LandingPage() {
                 Ready to build your next form?
               </h2>
               <p className="text-muted-foreground mx-auto mt-4 max-w-xl text-base">
-                Join thousands of creators collecting beautiful, useful answers.
-                Set up takes less than a minute.
+                Join thousands of creators collecting beautiful, useful answers. Set up takes less
+                than a minute.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Button

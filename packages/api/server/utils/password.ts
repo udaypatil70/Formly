@@ -10,11 +10,7 @@ const COST = { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 const HASH_FORMAT = /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/;
 
-function derive(
-  password: string,
-  salt: string,
-  keylen: number,
-): Promise<Buffer> {
+function derive(password: string, salt: string, keylen: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scrypt(password, salt, keylen, COST, (error, derived) => {
       if (error) reject(error);
@@ -48,12 +44,9 @@ export async function hashPassword(password: string): Promise<string> {
  *
  * Supports the scrypt format produced by `hashPassword` plus values written
  * before hashing existed. The legacy path is compared in constant time so it
- * leaks no timing information; use `needsRehash` to migrate those values.
+ * leaks no timing information.
  */
-export async function verifyPassword(
-  password: string,
-  stored: string,
-): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   if (!stored || !password) return false;
 
   if (!isHashedPassword(stored)) {
@@ -75,11 +68,6 @@ export async function verifyPassword(
   } catch {
     return false;
   }
-}
-
-/** Legacy (pre-scrypt) values should be upgraded the next time they verify. */
-export function needsRehash(stored: string | undefined | null): boolean {
-  return !stored || !isHashedPassword(stored);
 }
 
 /**

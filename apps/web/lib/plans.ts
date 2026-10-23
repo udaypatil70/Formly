@@ -1,14 +1,11 @@
 import { useMemo } from "react";
-import {
-  Building2Icon,
-  RocketIcon,
-  SparklesIcon,
-  type LucideIcon,
-} from "lucide-react";
+import { Building2Icon, RocketIcon, SparklesIcon, type LucideIcon } from "lucide-react";
 
 import { trpc } from "~/trpc/client";
 
 export type Billing = "monthly" | "yearly";
+export const BILLING_OPTIONS: Billing[] = ["monthly", "yearly"];
+export const YEARLY_DISCOUNT_LABEL = "−20%";
 
 export type PlanKey = "free" | "pro" | "enterprise";
 
@@ -20,10 +17,7 @@ type Entitlements = Record<string, boolean | number | null>;
  * the `plans` table via `GET /api/plans`, so the two pages can never drift from
  * what the server enforces.
  */
-const PRESENTATION: Record<
-  PlanKey,
-  { icon: LucideIcon; highlight: boolean; cta: string }
-> = {
+const PRESENTATION: Record<PlanKey, { icon: LucideIcon; highlight: boolean; cta: string }> = {
   free: { icon: SparklesIcon, highlight: false, cta: "Start for free" },
   pro: { icon: RocketIcon, highlight: true, cta: "Start free trial" },
   enterprise: { icon: Building2Icon, highlight: false, cta: "Contact sales" },
@@ -104,8 +98,7 @@ export function usePlanCatalogue(billing: Billing) {
       const chrome = PRESENTATION[key];
       if (!plan) return [];
 
-      const minor =
-        billing === "yearly" ? plan.priceYearlyPerMonth : plan.priceMonthly;
+      const minor = billing === "yearly" ? plan.priceYearlyPerMonth : plan.priceMonthly;
       return [
         {
           key,
@@ -143,10 +136,7 @@ export function usePlanCatalogue(billing: Billing) {
 }
 
 /** Short caption under the price, e.g. "billed annually" / "free forever". */
-export function billingCaption(
-  plan: PlanView,
-  billing: Billing,
-): string {
+export function billingCaption(plan: PlanView, billing: Billing): string {
   if (plan.key === "free") return "free forever";
   if (plan.priceLabel === "Custom") return "tailored to your team";
   if (billing === "yearly") return "billed annually";

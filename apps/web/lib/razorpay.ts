@@ -26,8 +26,7 @@ function getRazorpayGlobal(): RazorpayConstructor | undefined {
   return (window as { Razorpay?: RazorpayConstructor }).Razorpay;
 }
 
-/** Loads the Razorpay Checkout script once and resolves with the constructor. */
-export function loadRazorpayCheckout(): Promise<RazorpayConstructor> {
+function ensureRazorpayCheckout(): Promise<RazorpayConstructor> {
   if (checkoutScriptPromise) return checkoutScriptPromise;
   checkoutScriptPromise = new Promise<RazorpayConstructor>((resolve, reject) => {
     if (typeof window === "undefined") {
@@ -54,4 +53,14 @@ export function loadRazorpayCheckout(): Promise<RazorpayConstructor> {
     document.body.appendChild(script);
   });
   return checkoutScriptPromise;
+}
+
+/** Loads the Razorpay Checkout script once and resolves with the constructor. */
+export function loadRazorpayCheckout(): Promise<RazorpayConstructor> {
+  return ensureRazorpayCheckout();
+}
+
+/** Loads the shared checkout script for flows with their own option types. */
+export function loadRazorpayCheckoutScript(): Promise<void> {
+  return ensureRazorpayCheckout().then(() => undefined);
 }

@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  ArrowRightIcon,
-  CheckIcon,
-  MinusIcon,
-  SparklesIcon,
-  HelpCircleIcon,
-} from "lucide-react";
+import { ArrowRightIcon, CheckIcon, MinusIcon, SparklesIcon, HelpCircleIcon } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,7 +13,13 @@ import {
   AccordionTrigger,
 } from "~/components/ui/accordion";
 import { cn } from "~/lib/utils";
-import { billingCaption, usePlanCatalogue, type Billing } from "~/lib/plans";
+import {
+  BILLING_OPTIONS,
+  YEARLY_DISCOUNT_LABEL,
+  billingCaption,
+  usePlanCatalogue,
+  type Billing,
+} from "~/lib/plans";
 import { SiteHeader } from "~/components/marketing/site-header";
 import { SiteFooter } from "~/components/marketing/site-footer";
 
@@ -58,8 +58,7 @@ const FAQS = [
 
 export function PricingPage() {
   const [billing, setBilling] = useState<Billing>("yearly");
-  const { plans, comparisonRows, isLoading, isError } =
-    usePlanCatalogue(billing);
+  const { plans, comparisonRows, isLoading, isError } = usePlanCatalogue(billing);
 
   return (
     <div className="min-h-svh bg-background">
@@ -82,12 +81,12 @@ export function PricingPage() {
             </span>
           </h1>
           <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-base sm:text-lg">
-            Start free. Upgrade when your forms take off. Every paid plan ships with
-            unlimited everything and a 14-day trial.
+            Start free. Upgrade when your forms take off. Every paid plan ships with unlimited
+            everything and a 14-day trial.
           </p>
 
           <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border/60 bg-white/[0.03] p-1">
-            {(["monthly", "yearly"] as const).map((option) => (
+            {BILLING_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -107,7 +106,7 @@ export function PricingPage() {
                       billing === option ? "text-white/80" : "text-emerald-400",
                     )}
                   >
-                    −20%
+                    {YEARLY_DISCOUNT_LABEL}
                   </span>
                 )}
               </button>
@@ -154,17 +153,13 @@ export function PricingPage() {
                       <tier.icon />
                     </span>
                     <h3 className="mt-4 text-lg font-semibold">{tier.name}</h3>
-                    <p className="text-muted-foreground text-sm">
-                      {tier.tagline}
-                    </p>
+                    <p className="text-muted-foreground text-sm">{tier.tagline}</p>
                     <div className="mt-5 flex items-baseline gap-1">
                       <span className="text-4xl font-semibold tracking-tight">
                         {tier.priceLabel}
                       </span>
                       {tier.priceLabel !== "Custom" && (
-                        <span className="text-muted-foreground text-sm">
-                          / month
-                        </span>
+                        <span className="text-muted-foreground text-sm">/ month</span>
                       )}
                     </div>
                     <p className="text-muted-foreground mt-1 h-4 text-xs">
@@ -247,9 +242,7 @@ export function PricingPage() {
                         index % 2 === 0 && "bg-white/[0.015]",
                       )}
                     >
-                      <td className="text-muted-foreground px-6 py-3.5">
-                        {row.label}
-                      </td>
+                      <td className="text-muted-foreground px-6 py-3.5">{row.label}</td>
                       {row.values.map((value, column) => (
                         <td key={column} className="px-6 py-3.5 text-center">
                           {typeof value === "boolean" ? (
