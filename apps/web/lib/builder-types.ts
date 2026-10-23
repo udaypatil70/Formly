@@ -1,8 +1,4 @@
-import type {
-  ConditionalLogic,
-  FieldType,
-  ValidationRules,
-} from "@repo/validators";
+import type { ConditionalLogic, FieldType, ValidationRules } from "@repo/validators";
 
 export interface BuilderOption {
   id?: string;
@@ -26,7 +22,8 @@ export interface BuilderField {
 }
 
 export interface BuilderFormSettings {
-  password?: string;
+  password?: string | null;
+  hasPassword?: boolean;
   expiry?: string | null;
   opensAt?: string | null;
   closesAt?: string | null;

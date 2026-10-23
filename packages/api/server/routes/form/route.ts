@@ -24,11 +24,7 @@ import {
   isMultiPage,
   planAllowsFeature,
 } from "../../utils/plans";
-import {
-  formDetailOutput,
-  formMetaOutput,
-  formWithCountsOutput,
-} from "../../utils/schemas";
+import { formDetailOutput, formMetaOutput, formWithCountsOutput } from "../../utils/schemas";
 import { domainProcedures, parseDomain } from "./domains";
 import { DB, assertFormOwner, insertFields, toVersionField } from "./shared";
 import { emitFormLifecycle } from "../../utils/webhooks";
@@ -41,10 +37,7 @@ export { assertFormOwner, insertFields };
 export type { DB };
 
 /** Throws PAYMENT_REQUIRED when the caller's plan doesn't grant `feature`. */
-async function assertFeature(
-  userId: string,
-  feature: PlanFeature,
-): Promise<void> {
+async function assertFeature(userId: string, feature: PlanFeature): Promise<void> {
   const { entitlements } = await getUserEntitlements(userId);
   if (!planAllowsFeature(entitlements, feature)) {
     throw new TRPCError({
@@ -88,9 +81,7 @@ export const formRouter = router({
         await assertFeature(ctx.user.id, "multiPageAndLogic");
       }
 
-      const slug = input.slug?.trim().length
-        ? input.slug
-        : slugify(input.title) || "untitled-form";
+      const slug = input.slug?.trim().length ? input.slug : slugify(input.title) || "untitled-form";
       const finalSlug = await ensureUniqueSlug(slug);
 
       try {
@@ -125,12 +116,7 @@ export const formRouter = router({
 
         return serializeForm(form);
       } catch (error) {
-        if (
-          typeof error === "object" &&
-          error &&
-          "code" in error &&
-          error.code === "23505"
-        ) {
+        if (typeof error === "object" && error && "code" in error && error.code === "23505") {
           throw new TRPCError({ code: "CONFLICT", message: "Slug already taken" });
         }
         throw error;
@@ -159,9 +145,7 @@ export const formRouter = router({
       const { page, pageSize } = input;
       const conditions = [
         eq(formsTable.ownerId, ctx.user.id),
-        input.includeArchived
-          ? eq(formsTable.archived, true)
-          : eq(formsTable.archived, false),
+        input.includeArchived ? eq(formsTable.archived, true) : eq(formsTable.archived, false),
       ];
 
       const rows = await db
@@ -261,12 +245,7 @@ export const formRouter = router({
           const conflict = await db
             .select({ id: formsTable.id })
             .from(formsTable)
-            .where(
-              and(
-                eq(formsTable.customDomain, nextCustomDomain),
-                ne(formsTable.id, input.id),
-              ),
-            )
+            .where(and(eq(formsTable.customDomain, nextCustomDomain), ne(formsTable.id, input.id)))
             .limit(1)
             .execute();
           if (conflict.length > 0) {
@@ -278,26 +257,26 @@ export const formRouter = router({
         }
       }
 
-      const baseSettings = input.settings ?? form.settings;
-      const nextSettings = { ...(baseSettings ?? {}) };
-      // Settings forms round-trip the masked/hashed value they loaded. Only a
-      // changed plaintext value may be hashed again, otherwise every unrelated
-      // settings save would re-hash the existing hash and break the password.
-      if (
-        nextSettings.password &&
-        nextSettings.password !== form.settings?.password
+      const { password: requestedPassword, ...submittedSettings } = input.settings ?? {};
+      const nextSettings: NonNullable<CreateFormInput["settings"]> = {
+        ...(input.settings === undefined ? (form.settings ?? {}) : submittedSettings),
+      };
+      const passwordWasProvided =
+        input.settings !== undefined &&
+        Object.prototype.hasOwnProperty.call(input.settings, "password");
+      if (passwordWasProvided && requestedPassword === null) {
+        delete nextSettings.password;
+      } else if (
+        typeof requestedPassword === "string" &&
+        requestedPassword !== form.settings?.password
       ) {
-        nextSettings.password = await hashPassword(
-          nextSettings.password as string,
-        );
+        nextSettings.password = await hashPassword(requestedPassword);
+      } else if (!passwordWasProvided && form.settings?.password) {
+        nextSettings.password = form.settings.password;
       }
 
-      const opensAt = nextSettings.opensAt
-        ? new Date(nextSettings.opensAt)
-        : null;
-      const closesAt = nextSettings.closesAt
-        ? new Date(nextSettings.closesAt)
-        : null;
+      const opensAt = nextSettings.opensAt ? new Date(nextSettings.opensAt) : null;
+      const closesAt = nextSettings.closesAt ? new Date(nextSettings.closesAt) : null;
       if (
         opensAt &&
         !isNaN(opensAt.getTime()) &&
@@ -327,8 +306,7 @@ export const formRouter = router({
         .update(formsTable)
         .set({
           title: input.title ?? form.title,
-          description:
-            input.description !== undefined ? input.description : form.description,
+          description: input.description !== undefined ? input.description : form.description,
           slug: input.slug ?? form.slug,
           visibility: input.visibility ?? form.visibility,
           themeId: input.themeId !== undefined ? input.themeId : form.themeId,
@@ -406,7 +384,8 @@ export const formRouter = router({
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
       const source = await assertFormOwner(input.id, ctx.user.id);
-      const { password: _password, ...cloneSettings } = source.settings ?? {};
+    const cloneSettings = { ...(source.settings ?? {}) };
+    delete cloneSettings.password;
 
       return db.transaction(async (tx) => {
         const newSlug = await ensureUniqueSlug(`${source.slug}-copy`);
@@ -555,47 +534,6 @@ export const formRouter = router({
       }));
     }),
 
-  /** Fetch the full snapshot for a single version. */
-  versionsGet: protectedProcedure
-    .input(idInput)
-    .output(
-      z.object({
-        id: z.string(),
-        version: z.number(),
-        label: z.string().nullable(),
-        title: z.string(),
-        description: z.string().nullable(),
-        themeId: z.string().uuid().nullable(),
-        settings: z.record(z.string(), z.unknown()),
-        fields: z.array(z.unknown()),
-        createdAt: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const rows = await db
-        .select()
-        .from(formVersionsTable)
-        .where(eq(formVersionsTable.id, input.id))
-        .limit(1)
-        .execute();
-      const version = rows[0];
-      if (!version) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
-      }
-      await assertFormOwner(version.formId, ctx.user.id);
-      return {
-        id: version.id,
-        version: version.version,
-        label: version.label ?? null,
-        title: version.title,
-        description: version.description ?? null,
-        themeId: version.themeId ?? null,
-        settings: version.settings ?? {},
-        fields: version.fields,
-        createdAt: version.createdAt.toISOString(),
-      };
-    }),
-
   /** Create a version snapshot of the form's current state. */
   versionsSave: protectedProcedure
     .input(
@@ -678,10 +616,7 @@ export const formRouter = router({
               ),
             )
             .execute();
-          await tx
-            .delete(fieldsTable)
-            .where(eq(fieldsTable.formId, version.formId))
-            .execute();
+          await tx.delete(fieldsTable).where(eq(fieldsTable.formId, version.formId)).execute();
         }
 
         for (const field of version.fields) {

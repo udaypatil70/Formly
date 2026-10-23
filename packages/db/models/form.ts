@@ -16,27 +16,16 @@ import { usersTable } from "./user";
 
 // ─── Enums ────────────────────────────────────────────────
 
-export const formStatusEnum = pgEnum("form_status", [
-  "draft",
-  "published",
-  "unpublished",
-]);
+export const formStatusEnum = pgEnum("form_status", ["draft", "published", "unpublished"]);
 
-export const formVisibilityEnum = pgEnum("form_visibility", [
-  "public",
-  "unlisted",
-]);
+export const formVisibilityEnum = pgEnum("form_visibility", ["public", "unlisted"]);
 
 /**
  * Verification state of `forms.custom_domain`. `public.resolveDomain` only
  * serves a form whose domain is `verified`, so a domain can never be hijacked
  * by writing the column directly.
  */
-export const domainStatusEnum = pgEnum("domain_status", [
-  "pending",
-  "verified",
-  "failed",
-]);
+export const domainStatusEnum = pgEnum("domain_status", ["pending", "verified", "failed"]);
 
 /**
  * Categories a form template can be filed under. Shared with the frontend
@@ -110,9 +99,7 @@ export const formsTable = pgTable(
      * Only a `verified` domain is served. Defaults to `pending` so an unverified
      * claim can never be live.
      */
-    customDomainStatus: domainStatusEnum("custom_domain_status")
-      .default("pending")
-      .notNull(),
+    customDomainStatus: domainStatusEnum("custom_domain_status").default("pending").notNull(),
     customDomainVerifiedAt: timestamp("custom_domain_verified_at"),
     status: formStatusEnum("status").default("draft").notNull(),
     visibility: formVisibilityEnum("visibility").default("public").notNull(),
@@ -126,18 +113,18 @@ export const formsTable = pgTable(
     settings: jsonb("settings")
       .$type<{
         password?: string;
-          /** Legacy single close date. `closesAt` is the preferred field. */
-          expiry?: string | null;
-          /** When the form starts accepting responses (ISO timestamp). */
-          opensAt?: string | null;
-          /** When the form stops accepting responses (ISO timestamp). */
-          closesAt?: string | null;
-          /** Soft target: the form closes once this many responses exist. */
-          responseTarget?: number | null;
-          /** Absolute cap on stored responses. */
-          responseLimit?: number | null;
-          /** Message shown when the form closes early (target/limit/manual). */
-          closeMessage?: string | null;
+        /** Legacy single close date. `closesAt` is the preferred field. */
+        expiry?: string | null;
+        /** When the form starts accepting responses (ISO timestamp). */
+        opensAt?: string | null;
+        /** When the form stops accepting responses (ISO timestamp). */
+        closesAt?: string | null;
+        /** Soft target: the form closes once this many responses exist. */
+        responseTarget?: number | null;
+        /** Absolute cap on stored responses. */
+        responseLimit?: number | null;
+        /** Message shown when the form closes early (target/limit/manual). */
+        closeMessage?: string | null;
         /** Allow the same visitor (IP) to submit more than once. */
         allowMultipleResponses?: boolean;
         /** Let respondents reopen their submission with their edit token. */
@@ -168,7 +155,6 @@ export const formsTable = pgTable(
   (table) => [
     index("forms_owner_id_idx").on(table.ownerId),
     index("forms_status_idx").on(table.status),
-    index("forms_slug_idx").on(table.slug),
     index("forms_custom_domain_status_idx").on(table.customDomainStatus),
   ],
 );
@@ -230,7 +216,6 @@ export const formDraftsTable = pgTable(
   },
   (table) => [
     index("form_drafts_form_id_idx").on(table.formId),
-    index("form_drafts_resume_token_idx").on(table.resumeToken),
     index("form_drafts_visitor_id_idx").on(table.visitorId),
     index("form_drafts_expires_at_idx").on(table.expiresAt),
   ],
@@ -251,21 +236,31 @@ export type FormVersionField = {
     maxLength?: number;
     min?: number;
     max?: number;
+    minLabel?: string;
+    maxLabel?: string;
     pattern?: string;
+    maxSize?: number;
+    allowedTypes?: string[];
     amount?: number;
     currency?: string;
   } | null;
   conditionalLogic: {
     showIf?: {
       fieldId: string;
-      operator:
-        | "equals"
-        | "not_equals"
-        | "contains"
-        | "greater_than"
-        | "less_than";
+      operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
       value: string | number | boolean;
     };
+    groups?: {
+      id: string;
+      all: boolean;
+      conditions: {
+        fieldId: string;
+        operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
+        value: string | number | boolean;
+      }[];
+    }[];
+    gotoPageId?: string;
+    gotoSubmit?: boolean;
   } | null;
   options: { label: string; value: string; order: number }[] | null;
 };
@@ -281,17 +276,16 @@ export const formVersionsTable = pgTable(
     label: varchar("label", { length: 255 }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    themeId: uuid("theme_id"),
+    themeId: uuid("theme_id").references(() => themesTable.id, {
+      onDelete: "set null",
+    }),
     settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
     fields: jsonb("fields").$type<FormVersionField[]>().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("form_versions_form_id_idx").on(table.formId),
-    uniqueIndex("form_versions_form_version_idx").on(
-      table.formId,
-      table.version,
-    ),
+    uniqueIndex("form_versions_form_version_idx").on(table.formId, table.version),
   ],
 );
 
@@ -343,6 +337,8 @@ export const fieldsTable = pgTable(
         maxLength?: number;
         min?: number;
         max?: number;
+        minLabel?: string;
+        maxLabel?: string;
         pattern?: string;
         maxSize?: number;
         allowedTypes?: string[];
@@ -355,12 +351,7 @@ export const fieldsTable = pgTable(
       .$type<{
         showIf?: {
           fieldId: string;
-          operator:
-            | "equals"
-            | "not_equals"
-            | "contains"
-            | "greater_than"
-            | "less_than";
+          operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
           value: string | number | boolean;
         };
         groups?: {
@@ -368,12 +359,7 @@ export const fieldsTable = pgTable(
           all: boolean;
           conditions: {
             fieldId: string;
-            operator:
-              | "equals"
-              | "not_equals"
-              | "contains"
-              | "greater_than"
-              | "less_than";
+            operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than";
             value: string | number | boolean;
           }[];
         }[];
@@ -458,10 +444,7 @@ export const answersTable = pgTable(
   (table) => [
     index("answers_response_id_idx").on(table.responseId),
     index("answers_field_id_idx").on(table.fieldId),
-    uniqueIndex("answers_response_field_idx").on(
-      table.responseId,
-      table.fieldId,
-    ),
+    uniqueIndex("answers_response_field_idx").on(table.responseId, table.fieldId),
   ],
 );
 
@@ -491,17 +474,13 @@ export const formPaymentsTable = pgTable(
     responseId: uuid("response_id").references(() => responsesTable.id, {
       onDelete: "set null",
     }),
-    razorpayOrderId: varchar("razorpay_order_id", { length: 255 })
-      .notNull()
-      .unique(),
+    razorpayOrderId: varchar("razorpay_order_id", { length: 255 }).notNull().unique(),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 255 }),
     amountPaise: integer("amount_paise").notNull(),
     currency: varchar("currency", { length: 3 }).default("INR").notNull(),
     status: paymentStatusEnum("status").default("created").notNull(),
     /** Portion of `amountPaise` already returned; supports partial refunds. */
-    refundedAmountPaise: integer("refunded_amount_paise")
-      .default(0)
-      .notNull(),
+    refundedAmountPaise: integer("refunded_amount_paise").default(0).notNull(),
     /** Most recent Razorpay refund id, for support/debugging. */
     razorpayRefundId: varchar("razorpay_refund_id", { length: 255 }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
@@ -512,7 +491,6 @@ export const formPaymentsTable = pgTable(
   (table) => [
     index("form_payments_form_id_idx").on(table.formId),
     index("form_payments_field_id_idx").on(table.fieldId),
-    index("form_payments_order_id_idx").on(table.razorpayOrderId),
     index("form_payments_payment_id_idx").on(table.razorpayPaymentId),
     index("form_payments_status_idx").on(table.status),
   ],
@@ -611,9 +589,7 @@ export const formWebhooksTable = pgTable(
     autoDisabledAt: timestamp("auto_disabled_at"),
     autoDisabledReason: text("auto_disabled_reason"),
   },
-  (table) => [
-    index("form_webhooks_form_id_idx").on(table.formId),
-  ],
+  (table) => [index("form_webhooks_form_id_idx").on(table.formId)],
 );
 
 // ─── Webhook Deliveries ────────────────────────────────────
@@ -635,7 +611,8 @@ export const formWebhookDeliveriesTable = pgTable(
       .notNull()
       .references(() => formWebhooksTable.id, { onDelete: "cascade" }),
     event: varchar("event", { length: 50 }).notNull(),
-    status: varchar("status", { length: 20 }).$type<WebhookDeliveryStatus>()
+    status: varchar("status", { length: 20 })
+      .$type<WebhookDeliveryStatus>()
       .default("pending")
       .notNull(),
     /** The exact JSON delivered, so a retry reproduces the same signature. */
@@ -667,7 +644,6 @@ export const formWebhookDeliveriesTable = pgTable(
   ],
 );
 
-
 // ─── Types ────────────────────────────────────────────────
 
 export type SelectForm = typeof formsTable.$inferSelect;
@@ -688,21 +664,13 @@ export type SelectFormPayment = typeof formPaymentsTable.$inferSelect;
 export type InsertFormPayment = typeof formPaymentsTable.$inferInsert;
 export type SelectFormVersion = typeof formVersionsTable.$inferSelect;
 export type InsertFormVersion = typeof formVersionsTable.$inferInsert;
-export type SelectDomainVerification =
-  typeof domainVerificationsTable.$inferSelect;
-export type InsertDomainVerification =
-  typeof domainVerificationsTable.$inferInsert;
+export type SelectDomainVerification = typeof domainVerificationsTable.$inferSelect;
+export type InsertDomainVerification = typeof domainVerificationsTable.$inferInsert;
 export type SelectFormWebhook = typeof formWebhooksTable.$inferSelect;
 export type InsertFormWebhook = typeof formWebhooksTable.$inferInsert;
-export type SelectFormWebhookDelivery =
-  typeof formWebhookDeliveriesTable.$inferSelect;
-export type InsertFormWebhookDelivery =
-  typeof formWebhookDeliveriesTable.$inferInsert;
-export type WebhookDeliveryStatus =
-  | "pending"
-  | "success"
-  | "retrying"
-  | "dead";
+export type SelectFormWebhookDelivery = typeof formWebhookDeliveriesTable.$inferSelect;
+export type InsertFormWebhookDelivery = typeof formWebhookDeliveriesTable.$inferInsert;
+export type WebhookDeliveryStatus = "pending" | "success" | "retrying" | "dead";
 export type WebhookDelivery = SelectFormWebhookDelivery;
 export type SelectFormFileUpload = typeof formFileUploadsTable.$inferSelect;
 export type InsertFormFileUpload = typeof formFileUploadsTable.$inferInsert;

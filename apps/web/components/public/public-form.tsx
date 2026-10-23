@@ -1,16 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
-import {
-  buildResponseSchema,
-  isFieldVisible,
-  type Field,
-} from "@repo/validators";
-import {
-  CheckCircle2Icon,
-  CreditCardIcon,
-  StarIcon,
-  UploadIcon,
-  XIcon,
-} from "lucide-react";
+import { buildResponseSchema, isFieldVisible, type Field } from "@repo/validators";
+import { CheckCircle2Icon, CreditCardIcon, StarIcon, UploadIcon, XIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -27,15 +17,11 @@ import {
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { getApiOrigin } from "~/lib/api-origin";
+import { loadRazorpayCheckoutScript } from "~/lib/razorpay";
 import { backgroundStyle, fontFamilyFor } from "~/lib/theme-utils";
 import { trpc } from "~/trpc/client";
 import { TurnstileWidget } from "./turnstile-widget";
-import type {
-  FileAnswer,
-  PaymentAnswer,
-  PublicField,
-  PublicFormData,
-} from "./types";
+import type { FileAnswer, PaymentAnswer, PublicField, PublicFormData } from "./types";
 
 export interface PaidPayment {
   fieldId: string;
@@ -106,32 +92,6 @@ declare global {
   }
 }
 
-let checkoutScriptPromise: Promise<void> | null = null;
-
-function loadCheckoutScript(): Promise<void> {
-  if (checkoutScriptPromise) return checkoutScriptPromise;
-  checkoutScriptPromise = new Promise<void>((resolve, reject) => {
-    if (typeof window === "undefined") {
-      reject(new Error("Payment is unavailable"));
-      return;
-    }
-    if (window.Razorpay) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => {
-      checkoutScriptPromise = null;
-      reject(new Error("Could not load the payment gateway"));
-    };
-    document.body.appendChild(script);
-  });
-  return checkoutScriptPromise;
-}
-
 // ─── Answer piping ({{fieldId}} tokens) ────────────────────
 
 const PIPE_TOKEN_RE =
@@ -173,17 +133,14 @@ function resolvePipedField(
   values: Record<string, unknown>,
 ): PublicField {
   const index = getIndex(field.id);
-  const isAllowed = (targetId: string) =>
-    index !== undefined && (getIndex(targetId) ?? -1) < index;
+  const isAllowed = (targetId: string) => index !== undefined && (getIndex(targetId) ?? -1) < index;
   return {
     ...field,
     label: applyPipe(field.label, values, isAllowed),
     placeholder: field.placeholder
       ? applyPipe(field.placeholder, values, isAllowed)
       : field.placeholder,
-    helpText: field.helpText
-      ? applyPipe(field.helpText, values, isAllowed)
-      : field.helpText,
+    helpText: field.helpText ? applyPipe(field.helpText, values, isAllowed) : field.helpText,
   };
 }
 
@@ -300,10 +257,7 @@ function FieldInput({
             />
           ) : (
             options.map((opt) => (
-              <Label
-                key={opt.value}
-                className="flex items-center gap-2 font-normal"
-              >
+              <Label key={opt.value} className="flex items-center gap-2 font-normal">
                 <Checkbox
                   checked={selected.includes(opt.value)}
                   onCheckedChange={(checked) => {
@@ -331,9 +285,7 @@ function FieldInput({
       const options = field.options ?? [];
       return (
         <RadioGroup
-          value={
-            typeof value === "string" ? (value as string) : undefined
-          }
+          value={typeof value === "string" ? (value as string) : undefined}
           onValueChange={(v) => onChange(v)}
           className="gap-2"
         >
@@ -345,10 +297,7 @@ function FieldInput({
             />
           ) : (
             options.map((opt) => (
-              <Label
-                key={opt.value}
-                className="flex items-center gap-2 font-normal"
-              >
+              <Label key={opt.value} className="flex items-center gap-2 font-normal">
                 <RadioGroupItem value={opt.value} />
                 {opt.label}
               </Label>
@@ -371,8 +320,7 @@ function FieldInput({
               <StarIcon
                 className={cn(
                   "size-6",
-                  (typeof value === "number" ? n <= value : false) &&
-                    "fill-primary text-primary",
+                  (typeof value === "number" ? n <= value : false) && "fill-primary text-primary",
                 )}
               />
             </button>
@@ -467,9 +415,7 @@ function FileUploadInput({
   const [error, setError] = useState<string | null>(null);
 
   const file: FileAnswer | null =
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as FileAnswer)
-      : null;
+    value && typeof value === "object" && !Array.isArray(value) ? (value as FileAnswer) : null;
 
   const upload = async (f: File) => {
     const maxSize = Number(field.validationRules?.maxSize ?? 25);
@@ -548,9 +494,7 @@ function FileUploadInput({
           )}
         >
           <UploadIcon className="size-5" />
-          <span className="text-sm">
-            {uploading ? "Uploading…" : "Click to upload a file"}
-          </span>
+          <span className="text-sm">{uploading ? "Uploading…" : "Click to upload a file"}</span>
           <span className="text-xs opacity-70">
             Max {Number(field.validationRules?.maxSize ?? 25)} MB
           </span>
@@ -598,9 +542,8 @@ function PaymentInput({
   const amount = Number(field.validationRules?.amount ?? 0);
   const currency = (field.validationRules?.currency ?? "INR").toUpperCase();
 
-  const paid = value && typeof value === "object" && "orderId" in value
-      ? (value as PaymentAnswer)
-      : null;
+  const paid =
+    value && typeof value === "object" && "orderId" in value ? (value as PaymentAnswer) : null;
 
   const pay = async () => {
     setError(null);
@@ -633,7 +576,7 @@ function PaymentInput({
         fieldId: field.id,
       });
 
-      await loadCheckoutScript();
+      await loadRazorpayCheckoutScript();
       if (!window.Razorpay) {
         throw new Error("Payment gateway is unavailable");
       }
@@ -744,9 +687,7 @@ export function PublicForm({
   editToken,
   editMode = false,
 }: PublicFormProps) {
-  const [values, setValues] = useState<Record<string, unknown>>(
-    initialValues ?? {},
-  );
+  const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -765,16 +706,12 @@ export function PublicForm({
   const stepMode = form.settings?.stepMode ?? "all";
   const startScreen = form.settings?.startScreen;
   const endScreen = form.settings?.endScreen;
-  const showStartScreen = Boolean(
-    startScreen?.enabled && !started && !submitted && !editMode,
-  );
+  const showStartScreen = Boolean(startScreen?.enabled && !started && !submitted && !editMode);
 
   const visibleFields = useMemo(
     () =>
       form.fields.filter(
-        (f) =>
-          f.type !== "page_break" &&
-          isFieldVisible(f.conditionalLogic, values),
+        (f) => f.type !== "page_break" && isFieldVisible(f.conditionalLogic, values),
       ),
     [form.fields, values],
   );
@@ -784,10 +721,7 @@ export function PublicForm({
     [visibleFields],
   );
 
-  const flatIndex = useMemo(
-    () => new Map(form.fields.map((f, i) => [f.id, i])),
-    [form.fields],
-  );
+  const flatIndex = useMemo(() => new Map(form.fields.map((f, i) => [f.id, i])), [form.fields]);
 
   // Steps: everything on one page (all), one field per screen (question), or
   // one page per screen using page breaks (page).
@@ -818,15 +752,11 @@ export function PublicForm({
   const currentFields = totalSteps > 0 ? steps[safeStep]! : [];
   const isLastStep = totalSteps === 0 || safeStep >= totalSteps - 1;
 
-  const buildStepSchema = (fields: PublicField[]) =>
-    buildResponseSchema(toValidatorFields(fields));
+  const buildStepSchema = (fields: PublicField[]) => buildResponseSchema(toValidatorFields(fields));
 
   // Jump targets: a field may send people to a section (page break) or straight
   // to submission once they reach it.
-  type Jump =
-    | { kind: "next" }
-    | { kind: "submit" }
-    | { kind: "step"; target: number };
+  type Jump = { kind: "next" } | { kind: "submit" } | { kind: "step"; target: number };
 
   const nextJump = (fields: PublicField[]): Jump => {
     for (const f of fields) {
@@ -836,13 +766,9 @@ export function PublicForm({
       if (logic.gotoPageId) {
         const breakIdx = flatIndex.get(logic.gotoPageId);
         if (breakIdx !== undefined) {
-          const firstAfter = visibleFields.find(
-            (vf) => flatIndex.get(vf.id)! > breakIdx,
-          );
+          const firstAfter = visibleFields.find((vf) => flatIndex.get(vf.id)! > breakIdx);
           if (firstAfter) {
-            const target = steps.findIndex((step) =>
-              step.some((s) => s.id === firstAfter.id),
-            );
+            const target = steps.findIndex((step) => step.some((s) => s.id === firstAfter.id));
             if (target >= 0) return { kind: "step", target: Math.min(target, totalSteps - 1) };
           }
           return { kind: "step", target: Math.max(totalSteps - 1, 0) };
@@ -859,9 +785,7 @@ export function PublicForm({
     const endMessage =
       endScreen?.message?.trim() ||
       form.settings?.thankYouMessage?.trim() ||
-      (editMode
-        ? "Your changes have been saved."
-        : "Thank you! Your response has been recorded.");
+      (editMode ? "Your changes have been saved." : "Thank you! Your response has been recorded.");
     const openEditLink = () => {
       if (!editToken) return;
       const url = new URL(window.location.href);
@@ -871,10 +795,7 @@ export function PublicForm({
     };
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
-        <CheckCircle2Icon
-          className="size-12"
-          style={{ color: form.theme?.colors.primary }}
-        />
+        <CheckCircle2Icon className="size-12" style={{ color: form.theme?.colors.primary }} />
         <h2 className="text-2xl font-semibold">{endTitle}</h2>
         <p className="text-muted-foreground">{endMessage}</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -925,9 +846,7 @@ export function PublicForm({
           >
             <h1 className="text-2xl font-bold">{startTitle}</h1>
             {startScreen?.description?.trim() ? (
-              <p className="max-w-md text-sm opacity-80">
-                {startScreen.description.trim()}
-              </p>
+              <p className="max-w-md text-sm opacity-80">{startScreen.description.trim()}</p>
             ) : null}
             <Button
               onClick={() => setStarted(true)}
@@ -1047,9 +966,7 @@ export function PublicForm({
       onDraftToken?.(res.token);
       setDraftLink(`${window.location.origin}${res.resumeUrl}`);
     } catch (err) {
-      setDraftError(
-        err instanceof Error ? err.message : "Could not save your draft",
-      );
+      setDraftError(err instanceof Error ? err.message : "Could not save your draft");
     } finally {
       setSavingDraft(false);
     }
@@ -1064,9 +981,7 @@ export function PublicForm({
       setDraftCopied(false);
       onDraftDeleted?.();
     } catch (err) {
-      setDraftError(
-        err instanceof Error ? err.message : "Could not discard your draft",
-      );
+      setDraftError(err instanceof Error ? err.message : "Could not discard your draft");
     }
   };
 
@@ -1095,8 +1010,7 @@ export function PublicForm({
   const surface = form.theme?.colors.surface ?? "#18181b";
   const text = form.theme?.colors.text ?? "#fafafa";
 
-  const progress =
-    totalSteps === 0 ? 100 : ((safeStep + 1) / totalSteps) * 100;
+  const progress = totalSteps === 0 ? 100 : ((safeStep + 1) / totalSteps) * 100;
 
   return (
     <div
@@ -1113,9 +1027,7 @@ export function PublicForm({
           style={{ backgroundColor: surface, borderColor: `${text}1f` }}
         >
           <h1 className="text-2xl font-bold">{form.title}</h1>
-          {form.description ? (
-            <p className="mt-2 text-sm opacity-80">{form.description}</p>
-          ) : null}
+          {form.description ? <p className="mt-2 text-sm opacity-80">{form.description}</p> : null}
           {form.requiresPassword ? (
             <p className="mt-2 text-xs opacity-60">Password protected form</p>
           ) : null}
@@ -1124,8 +1036,7 @@ export function PublicForm({
               className="mt-3 rounded-md border px-3 py-2 text-xs"
               style={{ borderColor: `${primary}55`, backgroundColor: `${primary}14` }}
             >
-              You are editing a submitted response. Changes replace the
-              original answers.
+              You are editing a submitted response. Changes replace the original answers.
             </p>
           ) : null}
 
@@ -1177,9 +1088,7 @@ export function PublicForm({
 
             {totalSteps === 0 ? (
               <div className="flex flex-col gap-2">
-                {errors._form ? (
-                  <p className="text-xs text-destructive">{errors._form}</p>
-                ) : null}
+                {errors._form ? <p className="text-xs text-destructive">{errors._form}</p> : null}
                 <Button type="submit" disabled={submitting} style={{ backgroundColor: primary }}>
                   {submitting ? "Submitting..." : "Submit"}
                 </Button>
@@ -1187,46 +1096,42 @@ export function PublicForm({
             ) : (
               <>
                 {currentFields.map((f) => {
-                  const field = resolvePipedField(
-                    f,
-                    (id) => flatIndex.get(id),
-                    values,
-                  );
+                  const field = resolvePipedField(f, (id) => flatIndex.get(id), values);
                   return (
-                  <div key={field.id} className="flex flex-col gap-2">
-                    <div className="flex items-center gap-1">
-                      <Label htmlFor={field.id}>
-                        {field.label}
-                        {field.required && <span style={{ color: primary }}> *</span>}
-                      </Label>
+                    <div key={field.id} className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1">
+                        <Label htmlFor={field.id}>
+                          {field.label}
+                          {field.required && <span style={{ color: primary }}> *</span>}
+                        </Label>
+                      </div>
+                      <FieldInput
+                        field={field}
+                        value={values[field.id]}
+                        onChange={(v) => updateValue(field.id, v)}
+                        autoFocus={currentFields.length === 1}
+                        formId={form.id}
+                        payment={{
+                          formTitle: form.title,
+                          slug,
+                          password,
+                          previewMode,
+                          onPaid: (p) => {
+                            paymentsRef.current = paymentsRef.current.filter(
+                              (existing) => existing.fieldId !== p.fieldId,
+                            );
+                            paymentsRef.current.push(p);
+                            onPaymentsChange?.(paymentsRef.current);
+                          },
+                        }}
+                      />
+                      {field.helpText ? (
+                        <p className="text-xs opacity-60">{field.helpText}</p>
+                      ) : null}
+                      {errors[field.id] ? (
+                        <p className="text-xs text-destructive">{errors[field.id]}</p>
+                      ) : null}
                     </div>
-                    <FieldInput
-                      field={field}
-                      value={values[field.id]}
-                      onChange={(v) => updateValue(field.id, v)}
-                      autoFocus={currentFields.length === 1}
-                      formId={form.id}
-                      payment={{
-                        formTitle: form.title,
-                        slug,
-                        password,
-                        previewMode,
-                        onPaid: (p) => {
-                          paymentsRef.current = paymentsRef.current.filter(
-                            (existing) => existing.fieldId !== p.fieldId,
-                          );
-                          paymentsRef.current.push(p);
-                          onPaymentsChange?.(paymentsRef.current);
-                        },
-                      }}
-                    />
-                    {field.helpText ? (
-                      <p className="text-xs opacity-60">{field.helpText}</p>
-                    ) : null}
-                    {errors[field.id] ? (
-                      <p className="text-xs text-destructive">{errors[field.id]}</p>
-                    ) : null}
-                  </div>
                   );
                 })}
 
@@ -1321,9 +1226,7 @@ export function PublicForm({
                       </div>
                     ) : null}
                     {draftError ? (
-                      <p className="text-center text-xs text-destructive">
-                        {draftError}
-                      </p>
+                      <p className="text-center text-xs text-destructive">{draftError}</p>
                     ) : null}
                   </div>
                 )}

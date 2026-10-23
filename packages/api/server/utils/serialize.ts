@@ -1,10 +1,5 @@
-import type {
-  SelectField,
-  SelectFieldOption,
-  SelectForm,
-  SelectTheme,
-} from "@repo/db/schema";
-import type { FieldOutput, FormOutput, ThemeOutput } from "./schemas";
+import type { SelectForm, SelectTheme } from "@repo/db/schema";
+import type { FormOutput, ThemeOutput } from "./schemas";
 
 export function serializeForm(
   form: SelectForm,
@@ -18,7 +13,11 @@ export function serializeForm(
     customDomainVerifiedAt: form.customDomainVerifiedAt
       ? form.customDomainVerifiedAt.toISOString()
       : null,
-    settings: settings ?? {},
+    settings: {
+      ...(settings ?? {}),
+      password: undefined,
+      hasPassword: Boolean(settings?.password),
+    },
     createdAt: form.createdAt.toISOString(),
     updatedAt: form.updatedAt ? form.updatedAt.toISOString() : null,
   };
@@ -27,30 +26,4 @@ export function serializeForm(
 export function serializeTheme(theme: SelectTheme | null): ThemeOutput | null {
   if (!theme) return null;
   return theme;
-}
-
-export function serializeField(
-  field: SelectField,
-  options: SelectFieldOption[] = [],
-): FieldOutput {
-  const hasKeys = (obj: unknown) =>
-    typeof obj === "object" && obj !== null && Object.keys(obj).length > 0;
-
-  return {
-    id: field.id,
-    formId: field.formId,
-    type: field.type,
-    label: field.label,
-    placeholder: field.placeholder ?? null,
-    helpText: field.helpText ?? null,
-    required: field.required,
-    order: field.order,
-    validationRules: hasKeys(field.validationRules)
-      ? field.validationRules
-      : undefined,
-    conditionalLogic: hasKeys(field.conditionalLogic)
-      ? field.conditionalLogic
-      : undefined,
-    options: options.length > 0 ? options.map((o) => o) : undefined,
-  };
 }

@@ -10,10 +10,16 @@ import {
   LayoutTemplateIcon,
   ListChecksIcon,
   MailIcon,
+  PhoneIcon,
   PlusIcon,
   SeparatorHorizontalIcon,
+  SlidersHorizontalIcon,
   StarIcon,
   TypeIcon,
+  UploadIcon,
+  CreditCardIcon,
+  LinkIcon,
+  Clock3Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATE_CATEGORIES, type TemplateCategory } from "@repo/validators";
@@ -29,12 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "~/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -63,17 +64,26 @@ const CATEGORIES = TEMPLATE_CATEGORIES.map((value) => ({
 
 type CategoryValue = TemplateCategory;
 
-const FIELD_TYPE_LABELS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+const FIELD_TYPE_LABELS: Record<
+  string,
+  { label: string; icon: React.ComponentType<{ className?: string }> }
+> = {
   short_text: { label: "Short text", icon: TypeIcon },
   long_text: { label: "Paragraph", icon: AlignLeftIcon },
   email: { label: "Email", icon: MailIcon },
+  phone: { label: "Phone", icon: PhoneIcon },
+  url: { label: "Website", icon: LinkIcon },
+  time: { label: "Time", icon: Clock3Icon },
   number: { label: "Number", icon: HashIcon },
   single_select: { label: "Dropdown", icon: ChevronDownIcon },
   multi_select: { label: "Multiple choice", icon: ListChecksIcon },
   checkbox: { label: "Checkbox", icon: CheckSquare2Icon },
   radio: { label: "Radio", icon: CircleDotIcon },
   rating: { label: "Rating", icon: StarIcon },
+  scale: { label: "Scale", icon: SlidersHorizontalIcon },
   date: { label: "Date", icon: CalendarIcon },
+  file_upload: { label: "File upload", icon: UploadIcon },
+  payment: { label: "Payment", icon: CreditCardIcon },
   page_break: { label: "Page break", icon: SeparatorHorizontalIcon },
 };
 
@@ -109,9 +119,7 @@ export function TemplatesPage() {
       toast.success("Template ready — make it yours");
       navigate(`/builder/${form.id}`);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to use template",
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to use template");
     }
   };
 
@@ -134,8 +142,8 @@ export function TemplatesPage() {
                 Start from a template
               </h1>
               <p className="text-muted-foreground mt-3 text-sm sm:text-base">
-                Pick a ready-made form, drop in your branding and publish in
-                minutes. Every template is fully editable.
+                Pick a ready-made form, drop in your branding and publish in minutes. Every template
+                is fully editable.
               </p>
             </div>
 
@@ -152,19 +160,14 @@ export function TemplatesPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-              <CategoryChip
-                active={category === undefined}
-                onClick={() => setCategory(undefined)}
-              >
+              <CategoryChip active={category === undefined} onClick={() => setCategory(undefined)}>
                 All
               </CategoryChip>
               {CATEGORIES.map((item) => (
                 <CategoryChip
                   key={item.value}
                   active={category === item.value}
-                  onClick={() =>
-                    setCategory(category === item.value ? undefined : item.value)
-                  }
+                  onClick={() => setCategory(category === item.value ? undefined : item.value)}
                 >
                   {item.label}
                 </CategoryChip>
@@ -193,9 +196,7 @@ export function TemplatesPage() {
             <Empty className="py-20">
               <EmptyHeader>
                 <EmptyTitle>No templates found</EmptyTitle>
-                <EmptyDescription>
-                  Try a different search term or category.
-                </EmptyDescription>
+                <EmptyDescription>Try a different search term or category.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -242,14 +243,10 @@ export function TemplatesPage() {
             ) : previewQuery.data ? (
               <div className="flex flex-col gap-2 py-2">
                 {previewQuery.data.fields.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    This template has no fields yet.
-                  </p>
+                  <p className="text-muted-foreground text-sm">This template has no fields yet.</p>
                 ) : (
                   previewQuery.data.fields.map((field) => {
-                    const meta =
-                      FIELD_TYPE_LABELS[field.type] ??
-                      FIELD_TYPE_LABELS.short_text!;
+                    const meta = FIELD_TYPE_LABELS[field.type] ?? FIELD_TYPE_LABELS.short_text!;
                     const Icon = meta.icon;
                     return (
                       <div
@@ -257,9 +254,7 @@ export function TemplatesPage() {
                         className="hover:bg-accent flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors"
                       >
                         <Icon className="text-muted-foreground size-4 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">
-                          {field.label}
-                        </span>
+                        <span className="min-w-0 flex-1 truncate">{field.label}</span>
                         {field.type === "page_break" ? null : field.required ? (
                           <span className="text-destructive shrink-0" title="Required">
                             *
@@ -271,18 +266,14 @@ export function TemplatesPage() {
                 )}
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm">
-                Couldn&apos;t load this template.
-              </p>
+              <p className="text-muted-foreground text-sm">Couldn&apos;t load this template.</p>
             )}
           </ScrollArea>
 
           <div className="flex items-center justify-between gap-3 border-t p-4">
             <span className="text-muted-foreground flex items-center gap-1.5 text-sm capitalize">
               {previewQuery.data?.form.templateCategory && (
-                <Badge variant="secondary">
-                  {previewQuery.data?.form.templateCategory}
-                </Badge>
+                <Badge variant="secondary">{previewQuery.data?.form.templateCategory}</Badge>
               )}
               <span>{previewQuery.data?.form.fieldCount} fields</span>
             </span>
@@ -352,11 +343,7 @@ function TemplateCard({
 
   return (
     <Card className="group flex h-full flex-col overflow-hidden rounded-xl border transition-all hover:-translate-y-0.5 hover:shadow-lg">
-      <button
-        type="button"
-        onClick={onPreview}
-        className="text-left focus:outline-none"
-      >
+      <button type="button" onClick={onPreview} className="text-left focus:outline-none">
         <div
           className="relative flex h-20 items-end p-4"
           style={{
@@ -370,9 +357,7 @@ function TemplateCard({
       </button>
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div>
-          <h3 className="font-semibold leading-snug tracking-tight line-clamp-1">
-            {title}
-          </h3>
+          <h3 className="font-semibold leading-snug tracking-tight line-clamp-1">{title}</h3>
           <p className="text-muted-foreground mt-1 text-sm leading-relaxed line-clamp-2">
             {description || "No description provided."}
           </p>

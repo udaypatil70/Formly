@@ -169,6 +169,13 @@
       "when": 1792697189820,
       "tag": "0023_black_tyrannus",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792774300000,
+      "tag": "0024_schema_cleanup",
+      "breakpoints": true
     }
   ]
 }

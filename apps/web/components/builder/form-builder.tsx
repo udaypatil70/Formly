@@ -29,11 +29,7 @@ import { toast } from "sonner";
 import type { UpdateFieldInput } from "@repo/validators";
 
 import { trpc } from "~/trpc/client";
-import type {
-  BuilderField,
-  BuilderFormSettings,
-  BuilderTheme,
-} from "~/lib/builder-types";
+import type { BuilderField, BuilderFormSettings, BuilderTheme } from "~/lib/builder-types";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -42,12 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { FieldCanvas } from "./field-canvas";
 import { FieldPalette, FieldPaletteContent } from "./field-palette";
 import { FieldInspector, FieldInspectorContent } from "./field-inspector";
@@ -175,9 +166,7 @@ export function FormBuilder({
       recordHistory();
       liveEditRef.current = { fieldId: id };
     }
-    setFields((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-    );
+    setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
     setSaving(true);
     scheduleFieldUpdate(id, { ...patch } as UpdateFieldInput);
     // reflect saving state after debounce+flush
@@ -199,9 +188,7 @@ export function FormBuilder({
         required: false,
         order,
         options:
-          type === "single_select" ||
-          type === "multi_select" ||
-          type === "radio"
+          type === "single_select" || type === "multi_select" || type === "radio"
             ? [
                 { label: "Option 1", value: "option-1", order: 0 },
                 { label: "Option 2", value: "option-2", order: 1 },
@@ -214,9 +201,7 @@ export function FormBuilder({
     void addMutation
       .mutateAsync({ formId, type, label, required: false, order })
       .then((created) => {
-        setFields((prev) =>
-          prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)),
-        );
+        setFields((prev) => prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)));
         if (pendingRef.current[tempId]) {
           pendingRef.current[created.id] = {
             ...pendingRef.current[tempId],
@@ -227,10 +212,7 @@ export function FormBuilder({
             clearTimeout(timersRef.current[tempId]);
             delete timersRef.current[tempId];
           }
-          timersRef.current[created.id] = setTimeout(
-            () => flushField(created.id),
-            500,
-          );
+          timersRef.current[created.id] = setTimeout(() => flushField(created.id), 500);
         }
         setSelectedId(created.id);
       })
@@ -282,9 +264,7 @@ export function FormBuilder({
         })),
       })
       .then((created) => {
-        setFields((prev) =>
-          prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)),
-        );
+        setFields((prev) => prev.map((f) => (f.id === tempId ? { ...f, id: created.id } : f)));
       })
       .catch((e) => {
         toast.error(e?.message ?? "Failed to duplicate field");
@@ -306,9 +286,7 @@ export function FormBuilder({
   };
 
   // ─── Multi-select bulk delete ────────────────────────────
-  const [multiSelected, setMultiSelected] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(() => new Set());
 
   const toggleSelected = (id: string) => {
     setMultiSelected((prev) => {
@@ -334,9 +312,7 @@ export function FormBuilder({
     setFields((prev) => prev.filter((f) => !ids.includes(f.id)));
     setMultiSelected(new Set());
     if (selectedId && ids.includes(selectedId)) setSelectedId(null);
-    void Promise.allSettled(
-      ids.map((id) => deleteMutation.mutateAsync({ id })),
-    ).then((results) => {
+    void Promise.allSettled(ids.map((id) => deleteMutation.mutateAsync({ id }))).then((results) => {
       const failed = results.filter((r) => r.status === "rejected");
       if (failed.length > 0) {
         toast.error(`Failed to delete ${failed.length} field(s)`);
@@ -365,6 +341,9 @@ export function FormBuilder({
     }));
     const settings: Record<string, unknown> = { ...meta.settings, ...patch };
     for (const [key, value] of Object.entries(settings)) {
+      if (value === null && key === "password") {
+        continue;
+      }
       if (value === null || value === undefined || value === "") {
         delete settings[key];
       }
@@ -399,17 +378,12 @@ export function FormBuilder({
       await utils.form.getById.invalidate({ id: formId });
       if (published) setShareOpen(true);
     } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Failed to update publish status",
-      );
+      toast.error(e instanceof Error ? e.message : "Failed to update publish status");
     }
   };
 
   // ─── Public preview data (reuses the same renderer) ──────
-  const previewForm = useMemo(
-    () => buildPublicForm(meta, fields, theme),
-    [meta, fields, theme],
-  );
+  const previewForm = useMemo(() => buildPublicForm(meta, fields, theme), [meta, fields, theme]);
 
   const isDirty = Object.keys(pendingRef.current).length > 0;
 
@@ -512,10 +486,7 @@ export function FormBuilder({
                   View live
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={publishBusy}
-                  onClick={() => void togglePublish(false)}
-                >
+                <DropdownMenuItem disabled={publishBusy} onClick={() => void togglePublish(false)}>
                   <SquareIcon />
                   Unpublish
                 </DropdownMenuItem>
@@ -549,11 +520,7 @@ export function FormBuilder({
           >
             <HistoryIcon />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPreviewOpen(true)}
-          >
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
             <Maximize2Icon /> Preview
           </Button>
         </div>
@@ -589,9 +556,7 @@ export function FormBuilder({
             onSettingsChange={updateSettings}
             onThemeChange={(t) => {
               setTheme(t);
-              void formUpdate
-                .mutateAsync({ id: formId, themeId: t?.id })
-                .catch(() => undefined);
+              void formUpdate.mutateAsync({ id: formId, themeId: t?.id }).catch(() => undefined);
             }}
             onUpdate={updateField}
             onDelete={deleteField}
@@ -608,12 +573,7 @@ export function FormBuilder({
 
       {/* Mobile action bar */}
       <div className="flex items-center gap-2 border-t bg-background px-4 py-2.5 lg:hidden">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={() => setPaletteOpen(true)}
-        >
+        <Button variant="outline" size="sm" className="flex-1" onClick={() => setPaletteOpen(true)}>
           <PlusIcon /> Add field
         </Button>
         <Button
@@ -629,10 +589,7 @@ export function FormBuilder({
 
       {/* Mobile sheets */}
       <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[75svh] overflow-y-auto"
-        >
+        <SheetContent side="bottom" className="max-h-[75svh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Field types</SheetTitle>
           </SheetHeader>
@@ -646,10 +603,7 @@ export function FormBuilder({
       </Sheet>
 
       <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[85svh] overflow-hidden"
-        >
+        <SheetContent side="bottom" className="max-h-[85svh] overflow-hidden">
           <SheetHeader>
             <SheetTitle>{selectedField ? "Field settings" : "Form settings"}</SheetTitle>
           </SheetHeader>
@@ -664,9 +618,7 @@ export function FormBuilder({
               onSettingsChange={updateSettings}
               onThemeChange={(t) => {
                 setTheme(t);
-                void formUpdate
-                  .mutateAsync({ id: formId, themeId: t?.id })
-                  .catch(() => undefined);
+                void formUpdate.mutateAsync({ id: formId, themeId: t?.id }).catch(() => undefined);
               }}
               onUpdate={updateField}
               onDelete={deleteField}
@@ -687,11 +639,7 @@ export function FormBuilder({
         onOpenChange={setShareOpen}
       />
 
-      <PreviewDialog
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        form={previewForm}
-      />
+      <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} form={previewForm} />
 
       <VersionHistoryDialog
         open={historyOpen}

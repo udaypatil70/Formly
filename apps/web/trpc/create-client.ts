@@ -1,12 +1,9 @@
 import { httpLink, httpBatchStreamLink } from "@repo/api/client";
 
+import { getApiOrigin } from "~/lib/api-origin";
 import { getVisitorId } from "~/lib/visitor";
 
-const configuredApiUrl: string = import.meta.env.VITE_API_URL ?? "/trpc";
-const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, "");
-const API_URL = normalizedApiUrl.endsWith("/trpc")
-  ? normalizedApiUrl
-  : `${normalizedApiUrl}/trpc`;
+const API_URL = `${getApiOrigin()}/trpc`;
 
 interface CreateTRPCHttpBatchClientClientOpts {
   enableStreaming?: boolean;
