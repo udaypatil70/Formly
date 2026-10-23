@@ -32,6 +32,7 @@ import {
 import { domainProcedures, parseDomain } from "./domains";
 import { DB, assertFormOwner, insertFields, toVersionField } from "./shared";
 import { emitFormLifecycle } from "../../utils/webhooks";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Forms"];
 
@@ -510,7 +511,12 @@ export const formRouter = router({
     })
     .input(slugInput)
     .output(z.object({ slug: z.string(), available: z.boolean() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("slug-check", ctx.ip ?? "unknown"),
+        { limit: 20, windowMs: 60_000 },
+        "Too many slug checks, please try again later",
+      );
       const available = await isSlugAvailable(input.slug);
       return { slug: input.slug, available };
     }),

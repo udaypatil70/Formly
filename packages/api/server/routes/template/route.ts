@@ -16,6 +16,7 @@ import {
   planAllowsFeature,
 } from "../../utils/plans";
 import { insertFields, type DB } from "../form/route";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Templates"];
 
@@ -61,7 +62,11 @@ export const templateRouter = router({
         total: z.number(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("template-list", ctx.ip ?? "unknown"),
+        { limit: 60, windowMs: 60_000 },
+      );
       const conditions = [eq(formsTable.isTemplate, true)];
       if (input.search) {
         const search = `%${input.search}%`;
@@ -124,7 +129,11 @@ export const templateRouter = router({
     })
     .input(idInput)
     .output(templateDetailOutput)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("template-detail", ctx.ip ?? "unknown"),
+        { limit: 60, windowMs: 60_000 },
+      );
       const rows = await db
         .select({ form: formsTable })
         .from(formsTable)
@@ -183,6 +192,10 @@ export const templateRouter = router({
     .input(idInput)
     .output(formMetaOutput)
     .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("template-use", ctx.user.id),
+        { limit: 30, windowMs: 60_000 },
+      );
       // Instantiating a template creates a real form, so it draws from the same
       // allowance as form.create — otherwise the quota is trivially bypassed.
       const { entitlements } = await getUserEntitlements(ctx.user.id);

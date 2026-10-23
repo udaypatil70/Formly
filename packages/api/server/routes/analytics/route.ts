@@ -8,6 +8,7 @@ import {
 } from "@repo/db/schema";
 import { router, protectedProcedure } from "../../trpc";
 import { assertFormOwner } from "../form/route";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Analytics"];
 
@@ -55,6 +56,10 @@ export const analyticsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("analytics-stats", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
 
       const [viewsRow] = await db
@@ -182,6 +187,10 @@ export const analyticsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("analytics-breakdown", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
 
       const fields = await db
@@ -258,6 +267,10 @@ export const analyticsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("analytics-dropoff", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
 
       const fields = await db

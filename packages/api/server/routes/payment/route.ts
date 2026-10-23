@@ -23,7 +23,11 @@ import { toMinorUnits } from "@repo/validators";
 
 import { router, publicProcedure, protectedProcedure } from "../../trpc";
 import { isAdminUser } from "../../utils/admin";
-import { rateLimit } from "../../utils/rate-limit";
+import {
+  enforceRateLimit,
+  rateLimit,
+  rateLimitKey,
+} from "../../utils/rate-limit";
 import { verifyPassword } from "../../utils/password";
 import {
   createRazorpayOrder,
@@ -272,6 +276,10 @@ export const paymentRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("payment-list", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
 
       const conditions: SQL[] = [eq(formPaymentsTable.formId, input.formId)];

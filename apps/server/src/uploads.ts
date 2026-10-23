@@ -17,6 +17,7 @@ import {
 } from "@repo/db/schema";
 import { verifyUploadSignature, signUploadPath } from "@repo/services/upload-signature";
 import { auth } from "@repo/services/auth";
+import { rateLimit } from "@repo/services/rate-limit";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB per file
 /** Global ceiling used when a field sets no `maxSize` of its own. */
@@ -80,30 +81,6 @@ const UUID_RE =
 
 const hashIp = (ip: string) =>
   createHash("sha256").update(`formly-salt:${ip}`).digest("hex");
-
-// In-memory per-IP rate limiter (uploads only; cheap and scoped).
-const uploadWindow = new Map<string, { count: number; resetAt: number }>();
-const UPLOAD_WINDOW_MS = 60_000;
-const UPLOAD_MAX_PER_WINDOW = 10;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = uploadWindow.get(ip);
-  if (!entry || entry.resetAt < now) {
-    uploadWindow.set(ip, { count: 1, resetAt: now + UPLOAD_WINDOW_MS });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > UPLOAD_MAX_PER_WINDOW;
-}
-
-/** Drops expired buckets so the map cannot grow without bound. */
-function pruneUploadWindow(): void {
-  const now = Date.now();
-  for (const [key, entry] of uploadWindow) {
-    if (entry.resetAt < now) uploadWindow.delete(key);
-  }
-}
 
 const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE, files: 1 },
@@ -205,13 +182,25 @@ export function uploadsRouter(uploadsDir: string): express.Router {
     return createReadStream(fullPath).pipe(res);
   });
 
-  router.post("/upload", upload.single("file"), async (req, res) => {
+  const limitUploads: express.RequestHandler = (req, res, next) => {
+    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    void rateLimit(`upload:${hashIp(ip)}`, {
+      limit: 10,
+      windowMs: 60_000,
+    })
+      .then(({ limited }) => {
+        if (limited) {
+          res.status(429).json({ error: "Too many uploads, try again later" });
+          return;
+        }
+        next();
+      })
+      .catch(next);
+  };
+
+  router.post("/upload", limitUploads, upload.single("file"), async (req, res) => {
     try {
-      pruneUploadWindow();
       const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
-      if (isRateLimited(ip)) {
-        return res.status(429).json({ error: "Too many uploads, try again later" });
-      }
 
       const formId = String(req.body?.formId ?? "");
       const fieldId = String(req.body?.fieldId ?? "");

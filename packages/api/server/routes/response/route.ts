@@ -17,6 +17,7 @@ import { router, protectedProcedure } from "../../trpc";
 import { getFieldsForForm, toValidatorField } from "../../utils/form";
 import { assertFormOwner } from "../form/route";
 import { emitResponseUpdated } from "../../utils/webhooks";
+import { enforceRateLimit, rateLimitKey } from "../../utils/rate-limit";
 
 const TAGS = ["Responses"];
 
@@ -76,6 +77,10 @@ export const responseRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("response-list", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
       const { page, pageSize } = input;
 
@@ -181,6 +186,11 @@ export const responseRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("response-export", ctx.user.id),
+        { limit: 10, windowMs: 60_000 },
+        "Too many exports, please try again later",
+      );
       const form = await assertFormOwner(input.formId, ctx.user.id);
 
       const { fields } = await getFieldsForForm(input.formId);
@@ -502,6 +512,10 @@ export const responseRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        rateLimitKey("response-uploads", ctx.user.id),
+        { limit: 60, windowMs: 60_000 },
+      );
       await assertFormOwner(input.formId, ctx.user.id);
       const rows = await db
         .select({
